@@ -3,7 +3,6 @@ wget "https://huggingface.co/datasets/thewh1teagle/phonikud-phonemes-data/resolv
 7z x knesset_phonemes_v1.txt.7z
 """
 
-import string
 import csv
 from tqdm import tqdm
 import regex as re
