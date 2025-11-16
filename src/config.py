@@ -36,6 +36,8 @@ class TrainArgs(Tap):
     wandb_project: str = "renikud"
     
     wandb_mode: str = "offline"
+    
+    freeze_bert: bool = True  # Set to False to fine-tune entire model
 
 
 def get_args():

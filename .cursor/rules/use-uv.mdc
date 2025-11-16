@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+Use uv to install packages.
+Use uv to run commands.
+Use uv to manage dependencies.
+
+Example:
+```
+uv sync
+uv run python src/prepare_data.py
+```

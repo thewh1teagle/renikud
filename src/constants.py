@@ -60,3 +60,8 @@ DEDUPLICATE_MAP = {
     QAMATS: PATAH,
     HOLAM_HASER_FOR_VAV: HOLAM,
 }
+
+# Renikud model specific constants
+VOWEL_CLASSES = ['', SHVA, SEGOL, HIRIK, PATAH, HOLAM, QUBUTS]
+CAN_HAVE_DAGESH = set('בכךפףו')
+CAN_HAVE_SIN_DOT = set('ש')
