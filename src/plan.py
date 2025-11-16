@@ -1,7 +1,17 @@
 """
 Classify chars into their possible diacritics to instruct while vibe coding
 """
-from constants import SHVA, SEGOL, HIRIK, PATAH, HOLAM, QUBUTS, DAGESH, SIN_DOT, QAMATS_QATAN, HATAMA
+from constants import (
+    SHVA, 
+    SEGOL, 
+    HIRIK, 
+    PATAH, 
+    HOLAM, 
+    QUBUTS,
+    DAGESH, 
+    SIN_DOT,
+    HATAMA
+)
 
 CLASSIFICATION_MAP = {
     'א',
