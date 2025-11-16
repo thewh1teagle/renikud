@@ -94,13 +94,6 @@ def clean_text(text: str):
             cleaned += c
     return cleaned
 
-def main():
-    pass
-    
-
-max_rows = 100
-c = 0
-
 if __name__ == "__main__":
     file = 'knesset_phonemes_v1.txt'
     out_file = 'knesset_phonemes_v1_clean.txt'
@@ -115,6 +108,4 @@ if __name__ == "__main__":
             text = clean_dagesh(text)
             text = deduplicate_diacritics(text)
             out.write(f'{text}\n')
-            c += 1
-            if c >= max_rows:
-                break
+
