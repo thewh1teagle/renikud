@@ -13,6 +13,10 @@ from constants import (
     HATAMA
 )
 
+VOWEL_DIACRITICS = [SHVA, SEGOL, HIRIK, PATAH, HOLAM, QUBUTS]
+CAN_HAVE_DAGESH = 'בכךפףו'
+CAN_HAVE_SIN_DOT = 'ש'
+
 CLASSIFICATION_MAP = {
     'א',
     'ב',
