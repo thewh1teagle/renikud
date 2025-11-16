@@ -96,7 +96,7 @@ def clean_text(text: str):
 
 if __name__ == "__main__":
     file = 'knesset_phonemes_v1.txt'
-    out_file = 'knesset_phonemes_v1_clean.txt'
+    out_file = 'renikud_data_v1.txt'
     total = sum(1 for _ in open(file, encoding='utf-8'))
     with open(file, encoding='utf-8') as f, open(out_file, 'w', encoding='utf-8') as out:
         reader = csv.reader(f, delimiter='\t')
