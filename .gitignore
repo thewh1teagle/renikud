@@ -16,3 +16,4 @@ dataset/
 checkpoint/
 checkpoints/
 outputs/
+*.tsv

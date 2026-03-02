@@ -16,13 +16,22 @@ def build_compute_metrics():
         else:
             predictions, labels = eval_pred
 
+        input_lengths = None
         if isinstance(predictions, tuple):
-            predictions = predictions[0]
+            # Trainer returns (logits, input_lengths) when model outputs both
+            if len(predictions) == 2:
+                predictions, input_lengths = predictions[0], predictions[1]
+            else:
+                predictions = predictions[0]
 
-        pred_ids = np.asarray(predictions).argmax(axis=-1)
+        logits = np.asarray(predictions)
         label_ids = np.asarray(labels)
 
-        pred_texts = [decode_ctc(row.tolist()) for row in pred_ids]
+        pred_texts = []
+        for i, row in enumerate(logits.argmax(axis=-1)):
+            length = int(input_lengths[i]) if input_lengths is not None else len(row)
+            pred_texts.append(decode_ctc(row[:length].tolist()))
+
         label_texts = [
             decode_ipa([int(token_id) for token_id in row if int(token_id) != -100])
             for row in label_ids

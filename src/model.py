@@ -67,7 +67,7 @@ class HebrewG2PCTC(nn.Module):
             expanded_mask = attention_mask
 
         logits = self.classifier(hidden_states)
-        output = {"logits": logits}
+        output = {"logits": logits, "input_lengths": expanded_mask.sum(dim=1).to(dtype=torch.long)}
 
         if labels is not None:
             output["loss"] = self._compute_ctc_loss(logits, expanded_mask, labels)
