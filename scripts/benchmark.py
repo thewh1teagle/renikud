@@ -38,7 +38,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--gt", type=str, default="gt.tsv")
     parser.add_argument("--device", type=str, default=None)
-    parser.add_argument("--strip-punct", action="store_true", help="Strip trailing punctuation from predictions")
+    parser.add_argument("--ignore-punct", action="store_true", help="Strip punctuation from both refs and preds")
     args = parser.parse_args()
 
     if not Path(args.gt).exists():
@@ -65,8 +65,10 @@ def main():
             )
         input_length = int(out["input_lengths"][0])
         pred = decode_ctc(out["logits"][0].argmax(dim=-1)[:input_length].tolist())
-        if args.strip_punct:
-            pred = pred.rstrip(".")
+        PUNCT = str.maketrans("", "", ".,?!")
+        if args.ignore_punct:
+            pred = pred.translate(PUNCT)
+            item["phonemes"] = item["phonemes"].translate(PUNCT)
 
         refs.append(item["phonemes"])
         hyps.append(pred)
