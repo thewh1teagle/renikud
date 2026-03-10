@@ -131,9 +131,9 @@ def main():
             with torch.autocast("cuda", enabled=args.fp16):
                 out = model(**batch)
 
-            loss = out["loss"] / args.gradient_accumulation_steps
-            scaler.scale(loss).backward()
-            accum_loss += loss.item()
+            scaled_loss = out["loss"] / args.gradient_accumulation_steps
+            scaler.scale(scaled_loss).backward()
+            accum_loss += out["loss"].item()
             global_step += 1
 
             if global_step % args.gradient_accumulation_steps == 0:
@@ -146,14 +146,15 @@ def main():
                 opt_step += 1
 
                 if opt_step % args.logging_steps == 0:
-                    print(f"[step {opt_step}] train_loss={accum_loss:.4f} lr_encoder={optimizer.param_groups[0]['lr']:.2e} lr_head={optimizer.param_groups[2]['lr']:.2e}")
+                    train_loss = accum_loss / (args.logging_steps * args.gradient_accumulation_steps)
+                    accum_loss = 0.0
+                    print(f"[step {opt_step}] train_loss={train_loss:.4f} lr_encoder={optimizer.param_groups[0]['lr']:.2e} lr_head={optimizer.param_groups[2]['lr']:.2e}")
                     wandb.log({
-                        "train_loss": accum_loss,
+                        "train_loss": train_loss,
                         "lr_encoder": optimizer.param_groups[0]["lr"],
                         "lr_head": optimizer.param_groups[2]["lr"],
                         "epoch": epoch,
                     }, step=opt_step)
-                    accum_loss = 0.0
 
                 if opt_step % args.save_steps == 0:
                     metrics = evaluate(model, eval_loader, device, args.fp16)
