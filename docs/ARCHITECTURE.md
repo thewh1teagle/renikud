@@ -63,15 +63,17 @@ The model returns a dict with `logits` and `input_lengths` (used to truncate pad
 
 ## Training
 
-Defined in `src/train.py` using a `G2PTrainer` subclass of Hugging Face `Trainer`.
+Defined in `src/train.py` as a plain PyTorch training loop (no HF Trainer).
 
 Key features:
 
 - Discriminative learning rates: separate LRs for encoder vs. projection/classifier head via `parameter_groups()`
+- Both LRs logged independently to wandb (`lr_encoder`, `lr_head`) for easy tuning
+- Cosine schedule with linear warmup (`--warmup-steps`)
 - Optional encoder freeze warmup: encoder weights are frozen for the first N steps, then unfrozen
 - Optional weight-only initialization via `--init-from-checkpoint` (loads weights, resets optimizer state — useful for fine-tuning on a new dataset)
-- Mixed precision (`fp16`) enabled automatically when CUDA is available
-- `remove_unused_columns=False` required since column names don't match standard HF model signatures
+- Mixed precision (`fp16`) with grad scaler, enabled automatically when CUDA is available
+- Checkpoints saved as `model.safetensors` + `train_state.json` (step, cer); oldest pruned beyond `--save-total-limit`
 
 ## Evaluation
 

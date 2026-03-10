@@ -17,6 +17,7 @@ uv run src/train.py \
   --head-lr 1e-4 \
   --train-batch-size 16 \
   --gradient-accumulation-steps 16 \
+  --warmup-steps 200 \
   --logging-steps 50 \
   --save-steps 500
 ```
