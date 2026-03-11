@@ -38,6 +38,12 @@ uv run renikud-onnx/scripts/export.py --checkpoint outputs/g2p-augmented/checkpo
 uv run hf upload thewh1teagle/renikud outputs/output3_clean_plus_13k_manual-from-best/checkpoint-3000 --include "model.safetensors" --include "trainer_state.json" --commit-message "add weights"
 ```
 
+## Download checkpoint
+
+```console
+uv run hf download thewh1teagle/renikud checkpoint-3000/model.safetensors --local-dir .
+```
+
 ## Documentation
 
 See `docs/ARCHITECTURE.md` and `docs/EVALUATION.md`.
