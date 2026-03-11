@@ -133,11 +133,13 @@ class HebrewG2PCTC(nn.Module):
         target_lengths = target_mask.sum(dim=1).to(dtype=torch.long)
         flat_targets = labels.masked_select(target_mask).to(dtype=torch.long)
 
-        return F.ctc_loss(
+        loss = F.ctc_loss(
             log_probs=log_probs,
             targets=flat_targets,
             input_lengths=input_lengths,
             target_lengths=target_lengths,
             blank=CTC_BLANK_ID,
             zero_infinity=True,
+            reduction="sum",
         )
+        return loss / logits.size(0)

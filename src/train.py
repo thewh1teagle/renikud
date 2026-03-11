@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import wandb
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from config import parse_args
@@ -114,11 +115,13 @@ def main():
 
     global_step = 0
     opt_step = 0
-    accum_loss = 0.0
     optimizer.zero_grad()
 
     for epoch in range(math.ceil(args.epochs)):
-        for batch in train_loader:
+        epoch_loss_sum = 0.0
+        epoch_steps = 0
+        pbar = tqdm(train_loader, desc=f"epoch {epoch+1}", dynamic_ncols=True)
+        for batch in pbar:
             if opt_step >= total_opt_steps:
                 break
 
@@ -133,7 +136,8 @@ def main():
 
             scaled_loss = out["loss"] / args.gradient_accumulation_steps
             scaler.scale(scaled_loss).backward()
-            accum_loss += out["loss"].item()
+            epoch_loss_sum += out["loss"].item()
+            epoch_steps += 1
             global_step += 1
 
             if global_step % args.gradient_accumulation_steps == 0:
@@ -145,9 +149,9 @@ def main():
                 optimizer.zero_grad()
                 opt_step += 1
 
+                train_loss = epoch_loss_sum / epoch_steps
+                pbar.set_postfix(step=opt_step, loss=f"{train_loss:.4f}", enc_lr=f"{optimizer.param_groups[0]['lr']:.2e}", head_lr=f"{optimizer.param_groups[2]['lr']:.2e}")
                 if opt_step % args.logging_steps == 0:
-                    train_loss = accum_loss / (args.logging_steps * args.gradient_accumulation_steps)
-                    accum_loss = 0.0
                     print(f"[step {opt_step}] train_loss={train_loss:.4f} lr_encoder={optimizer.param_groups[0]['lr']:.2e} lr_head={optimizer.param_groups[2]['lr']:.2e}")
                     wandb.log({
                         "train_loss": train_loss,
