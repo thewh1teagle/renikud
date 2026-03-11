@@ -35,7 +35,7 @@ uv run renikud-onnx/scripts/export.py --checkpoint outputs/g2p-augmented/checkpo
 ## Upload Checkpoint to HuggingFace
 
 ```console
-uv run huggingface-cli upload thewh1teagle/renikud outputs/g2p-mixed3-highlr/checkpoint-18000 checkpoint-18000 --include "model.safetensors" --include "trainer_state.json" --commit-message "add checkpoint-18000 weights"
+uv run hf upload thewh1teagle/renikud outputs/output3_clean_plus_13k_manual-from-best/checkpoint-3000 --include "model.safetensors" --include "trainer_state.json" --commit-message "add weights"
 ```
 
 ## Documentation
