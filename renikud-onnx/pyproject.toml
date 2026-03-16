@@ -1,0 +1,22 @@
+[project]
+name = "renikud-onnx"
+version = "0.1.0"
+description = "G2P in Hebrew"
+readme = "README.md"
+authors = [
+    { name = "yakov", email = "61390950+thewh1teagle@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "onnxruntime>=1.24.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "onnx>=1.20.1",
+    "onnxscript>=0.6.2",
+]
