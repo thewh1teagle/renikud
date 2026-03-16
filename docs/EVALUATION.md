@@ -10,14 +10,14 @@ All evaluation uses [jiwer](https://github.com/jitsi/jiwer) to compute:
 
 ### During Training
 
-`src/evaluate.py` computes CER and WER on the validation split at each eval step via the Hugging Face `Trainer`. Predictions are truncated to `input_lengths` before CTC decoding to avoid scoring padded frames.
+`src/train.py` computes consonant accuracy, vowel accuracy, and stress accuracy on the validation split at each eval step.
 
 ### Standalone Benchmark
 
 `scripts/benchmark.py` evaluates a checkpoint against an external ground-truth file:
 
-```
-uv run scripts/benchmark.py --checkpoint outputs/g2p-v1/checkpoint-18000 --gt gt.tsv
+```console
+uv run scripts/benchmark.py --checkpoint outputs/my-run/checkpoint-1200 --gt gt.tsv
 ```
 
 Optional `--ignore-punct` strips `.,?!` from both references and predictions before scoring.
@@ -31,17 +31,15 @@ The benchmark is [heb-g2p-benchmark](https://github.com/thewh1teagle/heb-g2p-ben
 - Homographs (words with different readings depending on context)
 
 Download:
-```
+```console
 wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv
 ```
 
-## Target: Outperform Phonikud
+## Results
 
-Our goal is to surpass [Phonikud](https://github.com/thewh1teagle/phonikud), the teacher model we use to generate training data.
+| Model | Acc | WER | CER |
+|---|---|---|---|
+| Phonikud (teacher) | 86.1% | 0.14 | 0.04 |
+| **Ours (best)** | **89.3%** | 0.107 | 0.026 |
 
-| Model | Acc | WER | CER | Stress WER |
-|---|---|---|---|---|
-| Phonikud (teacher) | 86.1% | 0.14 | 0.04 | 0.09 |
-| **Ours (best)** | **91%** | — | — | — |
-
-We have surpassed Phonikud — the model now exceeds its own training signal. Achieved by augmenting training data with ~1M sentences of IPA transcriptions derived from ASR.
+We have surpassed Phonikud — the model now exceeds its own training signal.

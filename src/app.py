@@ -13,9 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 import gradio as gr
 import torch
 
-from constants_classifier import MAX_LEN
-from infer_classifier import load_classifier_checkpoint, phonemize
-from model_classifier import HebrewG2PClassifier
+from constants import MAX_LEN
+from infer import load_checkpoint, phonemize
+from model import HebrewG2PClassifier
 from tokenization import load_encoder_tokenizer
 
 checkpoint = sys.argv[1] if len(sys.argv) > 1 else None
@@ -26,7 +26,7 @@ if not checkpoint:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = load_encoder_tokenizer()
 model = HebrewG2PClassifier()
-load_classifier_checkpoint(model, checkpoint)
+load_checkpoint(model, checkpoint)
 model.to(device).eval()
 
 

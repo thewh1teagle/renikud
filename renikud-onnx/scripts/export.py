@@ -1,9 +1,9 @@
 """
-Export HebrewG2PCTC to a self-contained ONNX file with vocab metadata embedded.
+Export HebrewG2PClassifier to a self-contained ONNX file with vocab metadata embedded.
 
 Usage:
-    uv run scripts/export.py --checkpoint ../outputs/g2p-augmented/checkpoint-1500 --output model.onnx
-    uv run scripts/export.py --checkpoint ../outputs/g2p-augmented/checkpoint-1500 --output model.onnx --int8
+    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier-v3/checkpoint-1200 --output model.onnx
+    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier-v3/checkpoint-1200 --output model.onnx --int8
 """
 
 import argparse
@@ -17,9 +17,9 @@ import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from constants import ID_TO_TOKEN
-from infer import load_checkpoint_state
-from model import HebrewG2PCTC
+from constants import CONSONANTS, VOWELS
+from infer import load_checkpoint
+from model import HebrewG2PClassifier
 from tokenization import load_encoder_tokenizer
 
 
@@ -32,18 +32,18 @@ def main():
 
     tokenizer = load_encoder_tokenizer()
     vocab = tokenizer.get_vocab()  # {token: id}
+    tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
 
-    model = HebrewG2PCTC()
-    model.load_state_dict(load_checkpoint_state(args.checkpoint))
+    model = HebrewG2PClassifier()
+    load_checkpoint(model, args.checkpoint)
     if args.int8:
-        model.float().eval()  # quantization tools require FP32 input
+        model.float().eval()
     else:
-        model.half().eval()  # fp16 keeps model under 2GB protobuf limit → single .onnx file
+        model.half().eval()
 
     dummy_ids = torch.zeros(1, 16, dtype=torch.long)
     dummy_mask = torch.ones(1, 16, dtype=torch.long)
 
-    # For INT8 we export FP32 to a temp file, quantize, then embed metadata
     export_path = args.output
     if args.int8:
         tmp = tempfile.NamedTemporaryFile(suffix=".onnx", delete=False)
@@ -52,15 +52,16 @@ def main():
 
     torch.onnx.export(
         model,
-        (dummy_ids, dummy_mask),
+        (dummy_ids, dummy_mask, tokenizer_vocab),
         export_path,
         input_names=["input_ids", "attention_mask"],
-        output_names=["logits", "input_lengths"],
+        output_names=["consonant_logits", "vowel_logits", "stress_logits"],
         dynamic_axes={
             "input_ids": {0: "batch", 1: "seq_len"},
             "attention_mask": {0: "batch", 1: "seq_len"},
-            "logits": {0: "batch", 1: "time"},
-            "input_lengths": {0: "batch"},
+            "consonant_logits": {0: "batch", 1: "seq_len"},
+            "vowel_logits": {0: "batch", 1: "seq_len"},
+            "stress_logits": {0: "batch", 1: "seq_len"},
         },
         opset_version=17,
     )
@@ -68,11 +69,8 @@ def main():
     if args.int8:
         quantize_dynamic(export_path, args.output, weight_type=QuantType.QInt8)
         Path(export_path).unlink(missing_ok=True)
-        # quantize_dynamic may also produce a .onnx.data sidecar
         Path(export_path + ".data").unlink(missing_ok=True)
 
-    # Embed vocab metadata into the ONNX file
-    # load_external_data=True merges the .data sidecar into memory
     onnx_model = onnx.load(args.output, load_external_data=True)
     meta = onnx_model.metadata_props
 
@@ -81,8 +79,12 @@ def main():
     entry.value = json.dumps(vocab)
 
     entry = meta.add()
-    entry.key = "ipa_vocab"
-    entry.value = json.dumps({str(k): v for k, v in ID_TO_TOKEN.items()})
+    entry.key = "consonant_vocab"
+    entry.value = json.dumps({str(i): c for i, c in enumerate(CONSONANTS)})
+
+    entry = meta.add()
+    entry.key = "vowel_vocab"
+    entry.value = json.dumps({str(i): v for i, v in enumerate(VOWELS)})
 
     entry = meta.add()
     entry.key = "cls_token_id"
@@ -94,7 +96,6 @@ def main():
 
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
 
-    # torch.onnx.export creates a .data sidecar; remove it now that everything is inlined
     data_file = Path(args.output + ".data")
     if data_file.exists():
         data_file.unlink()
