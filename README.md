@@ -1,4 +1,4 @@
-# renikud-v5
+# renikud
 
 Hebrew grapheme-to-phoneme (G2P) training project for converting unvocalized Hebrew text into IPA.
 
