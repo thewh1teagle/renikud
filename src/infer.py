@@ -186,12 +186,11 @@ def _decode(
 
 
 def phonemize(
-    text: str, 
-    model: HebrewG2PClassifier, 
-    tokenizer, 
-    vocab_cache: dict[int, str], 
-    device: torch.device, 
-    max_len: int
+    text: str,
+    model: HebrewG2PClassifier,
+    tokenizer,
+    device: torch.device,
+    max_len: int,
 ) -> str:
     """Convert unvocalized Hebrew text to IPA using the classifier model."""
     encoding = tokenizer(
@@ -201,7 +200,7 @@ def phonemize(
         return_offsets_mapping=True,
         return_tensors="pt",
     )
-    offset_mapping = encoding.pop("offset_mapping")[0].tolist()  
+    offset_mapping = encoding.pop("offset_mapping")[0].tolist()
     input_ids = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
 
@@ -212,7 +211,7 @@ def phonemize(
         out = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            tokenizer_vocab=vocab_cache, # Passed statically instead of rebuilding
+            tokenizer_vocab=build_tokenizer_vocab(tokenizer),
         )
 
     return _decode(
@@ -229,13 +228,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = load_encoder_tokenizer()
-    vocab_cache = build_tokenizer_vocab(tokenizer)
-    
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
 
-    print(phonemize(args.text, model, tokenizer, vocab_cache, device, args.max_len))
+    print(phonemize(args.text, model, tokenizer, device, args.max_len))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from model import HebrewG2PClassifier
-from infer import load_checkpoint, phonemize, build_tokenizer_vocab
+from infer import load_checkpoint, phonemize
 from tokenization import load_encoder_tokenizer
 from constants import MAX_LEN
 
@@ -56,10 +56,8 @@ def main():
     gt_data = load_gt(args.gt)
     refs, hyps, examples = [], [], []
 
-    vocab_cache = build_tokenizer_vocab(tokenizer)
-
     for item in tqdm(gt_data, desc="Benchmarking"):
-        pred = phonemize(item["sentence"], model, tokenizer, vocab_cache, device, MAX_LEN)
+        pred = phonemize(item["sentence"], model, tokenizer, device, MAX_LEN)
         ref = item["phonemes"]
         if args.ignore_punct:
             ref = ref.translate(PUNCT)
