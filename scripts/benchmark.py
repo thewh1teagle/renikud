@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from model import HebrewG2PClassifier
-from infer import load_checkpoint, phonemize
+from infer import load_checkpoint, phonemize, build_tokenizer_vocab
 from tokenization import load_encoder_tokenizer
 from constants import MAX_LEN
 
@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--gt", type=str, default="gt.tsv")
     parser.add_argument("--ignore-punct", action="store_true")
+    parser.add_argument("--save-results", type=str, help="Path to save the full predictions TSV")
     args = parser.parse_args()
 
     if not Path(args.gt).exists():
@@ -46,7 +47,7 @@ def main():
         print("wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv")
         return
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     tokenizer = load_encoder_tokenizer()
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
@@ -55,8 +56,10 @@ def main():
     gt_data = load_gt(args.gt)
     refs, hyps, examples = [], [], []
 
+    vocab_cache = build_tokenizer_vocab(tokenizer)
+
     for item in tqdm(gt_data, desc="Benchmarking"):
-        pred = phonemize(item["sentence"], model, tokenizer, device, MAX_LEN)
+        pred = phonemize(item["sentence"], model, tokenizer, vocab_cache, device, MAX_LEN)
         ref = item["phonemes"]
         if args.ignore_punct:
             ref = ref.translate(PUNCT)
@@ -76,6 +79,14 @@ def main():
     print(f"  CER: {jiwer.cer(refs, hyps):.4f}")
     print(f"  WER: {jiwer.wer(refs, hyps):.4f}")
     print(f"  Acc: {1 - jiwer.wer(refs, hyps):.1%}")
+
+    if args.save_results:
+        with open(args.save_results, "w", encoding="utf-8") as f:
+            writer = csv.writer(f, delimiter="\t")
+            writer.writerow(["Sentence", "GT", "Prediction"])
+            for item, pred in zip(gt_data, hyps):
+                writer.writerow([item["sentence"], item["phonemes"], pred])
+        print(f"\nSaved full results to {args.save_results}")
 
 
 if __name__ == "__main__":

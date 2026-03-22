@@ -1,8 +1,4 @@
-"""Run inference with the Hebrew G2P classifier model.
-
-Usage:
-    uv run src/infer.py --checkpoint outputs/g2p-classifier/checkpoint-5000 --text "שלום עולם"
-"""
+"""Run inference with the Hebrew G2P classifier model."""
 
 from __future__ import annotations
 
@@ -14,12 +10,24 @@ import torch
 from constants import (
     ID_TO_CONSONANT,
     ID_TO_VOWEL,
-    HEBREW_LETTER_TO_ALLOWED_CONSONANTS,
-    CONSONANT_TO_ID,
     STRESS_YES,
+    VOWEL_TO_ID,
     MAX_LEN,
     is_hebrew_letter,
 )
+
+# Index for ∅ (no vowel) — cannot place primary stress on these tokens
+VOWEL_EMPTY_ID = VOWEL_TO_ID["∅"]
+
+# ג׳ / ז׳ / צ׳ — geresh signals affricate/fricative; IPA is on the letter, not a literal apostrophe
+GIMEL_ZAYIN_TSADI = frozenset({"ג", "ז", "צ"})
+
+
+def _is_hebrew_geresh(ch: str) -> bool:
+    """U+05F3 ׳, ASCII ', or typographic ' (U+2019) used as Hebrew geresh."""
+    return len(ch) == 1 and ch in ("\u05f3", "'", "\u2019")
+
+
 from model import HebrewG2PClassifier
 from tokenization import load_encoder_tokenizer
 
@@ -34,10 +42,10 @@ def parse_args():
 
 def load_checkpoint(model: HebrewG2PClassifier, checkpoint_dir: str) -> None:
     from safetensors.torch import load_file
-    import torch
     base = Path(checkpoint_dir)
     safetensors_path = base / "model.safetensors"
     bin_path = base / "pytorch_model.bin"
+    
     if safetensors_path.exists():
         state = load_file(str(safetensors_path), device="cpu")
     elif bin_path.exists():
@@ -53,14 +61,22 @@ def build_tokenizer_vocab(tokenizer) -> dict[int, str]:
     return {v: k for k, v in vocab.items()}
 
 
-def _best_stress_per_word(offset_mapping: list[tuple[int, int]], text: str, stress_logits: torch.Tensor) -> set[int]:
+def _best_stress_per_word(
+    offset_mapping: list[tuple[int, int]],
+    text: str,
+    stress_logits: torch.Tensor,
+    vowel_preds: torch.Tensor,
+) -> set[int]:
     """
-    For each whitespace-delimited word, pick at most one token index to carry stress —
-    the one with the highest stress logit score among those that predicted stress.
-    Returns a set of token indices that are allowed to emit stress.
+    Ensures each word has exactly one primary stress when it has at least one vowel token.
+
+    Prefer tokens where STRESS_YES > STRESS_NO; if the model is unconfident on all vowels,
+    fall back to the vowel with the largest (YES - NO) margin so Hebrew words never lack stress.
     """
     import re
-    # Group single-char token indices by word span
+
+    STRESS_NO = 0 if STRESS_YES == 1 else 1
+
     word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
     words: dict[int, list[int]] = {i: [] for i in range(len(word_spans))}
 
@@ -72,11 +88,33 @@ def _best_stress_per_word(offset_mapping: list[tuple[int, int]], text: str, stre
                 words[word_idx].append(tok_idx)
                 break
 
-    # Per word: pick the token with the highest stress score (every word must have exactly one stress)
     stressed: set[int] = set()
     for toks in words.values():
-        if toks:
-            stressed.add(max(toks, key=lambda t: stress_logits[t, STRESS_YES].item()))
+        if not toks:
+            continue
+
+        vowel_toks = [t for t in toks if int(vowel_preds[t].item()) != VOWEL_EMPTY_ID]
+
+        if not vowel_toks:
+            continue
+
+        confident_toks = [
+            t for t in vowel_toks if stress_logits[t, STRESS_YES] > stress_logits[t, STRESS_NO]
+        ]
+
+        if confident_toks:
+            best_tok = max(
+                confident_toks,
+                key=lambda t: (stress_logits[t, STRESS_YES] - stress_logits[t, STRESS_NO]).item(),
+            )
+            stressed.add(best_tok)
+        else:
+            best_tok = max(
+                vowel_toks,
+                key=lambda t: (stress_logits[t, STRESS_YES] - stress_logits[t, STRESS_NO]).item(),
+            )
+            stressed.add(best_tok)
+
     return stressed
 
 
@@ -88,20 +126,27 @@ def _decode(
     stress_logits: torch.Tensor,
 ) -> str:
     """Decode per-token logits into an IPA string."""
-    consonant_preds = consonant_logits.argmax(dim=-1)  # [S]
-    vowel_preds = vowel_logits.argmax(dim=-1)           # [S]
-    stressed_positions = _best_stress_per_word(offset_mapping, text, stress_logits)
+    consonant_preds = consonant_logits.argmax(dim=-1)
+    vowel_preds = vowel_logits.argmax(dim=-1)
+    stressed_positions = _best_stress_per_word(offset_mapping, text, stress_logits, vowel_preds)
 
-    result = []
+    result: list[str] = []
     prev_char_end = 0
+    last_src_char: str | None = None
+
+    def emit_raw_gap(gap: str) -> None:
+        nonlocal last_src_char
+        for c in gap:
+            if _is_hebrew_geresh(c) and last_src_char in GIMEL_ZAYIN_TSADI:
+                continue
+            result.append(c)
+            last_src_char = c
 
     for tok_idx, (start, end) in enumerate(offset_mapping):
-        # Pass through any characters skipped by the tokenizer
         if start > prev_char_end:
-            result.append(text[prev_char_end:start])
+            emit_raw_gap(text[prev_char_end:start])
 
         if end - start != 1:
-            # CLS, SEP, or multi-char token — skip
             if end > start:
                 prev_char_end = end
             continue
@@ -110,25 +155,19 @@ def _decode(
         prev_char_end = end
 
         if not is_hebrew_letter(char):
-            # Non-Hebrew: pass through as-is
+            if _is_hebrew_geresh(char) and last_src_char in GIMEL_ZAYIN_TSADI:
+                continue
             result.append(char)
+            last_src_char = char
             continue
 
-        # Get predictions
         consonant = ID_TO_CONSONANT.get(int(consonant_preds[tok_idx]), "∅")
         vowel = ID_TO_VOWEL.get(int(vowel_preds[tok_idx]), "∅")
         stress = tok_idx in stressed_positions
 
-        # Apply per-letter consonant constraint at inference
-        allowed = HEBREW_LETTER_TO_ALLOWED_CONSONANTS.get(char, (CONSONANT_TO_ID["∅"],))
-        if CONSONANT_TO_ID.get(consonant, 0) not in allowed:
-            # Fall back to most probable allowed consonant
-            for cid in sorted(allowed, key=lambda x: -consonant_logits[tok_idx, x].item()):
-                consonant = ID_TO_CONSONANT[cid]
-                break
+        # The model's forward pass already masked out impossible consonants via -1e9.
+        # No fallback logic needed here!
 
-        # Assemble IPA chunk in benchmark-compatible order: [consonant][ˈ][vowel]
-        # (dataset/GT encodes stress before the vowel, e.g. "ʁˈa")
         chunk = ""
         if consonant != "∅":
             chunk += consonant
@@ -138,15 +177,22 @@ def _decode(
             chunk += vowel
 
         result.append(chunk)
+        last_src_char = char
 
-    # Append any remaining characters
     if prev_char_end < len(text):
-        result.append(text[prev_char_end:])
+        emit_raw_gap(text[prev_char_end:])
 
     return "".join(result)
 
 
-def phonemize(text: str, model: HebrewG2PClassifier, tokenizer, device: torch.device, max_len: int) -> str:
+def phonemize(
+    text: str, 
+    model: HebrewG2PClassifier, 
+    tokenizer, 
+    vocab_cache: dict[int, str], 
+    device: torch.device, 
+    max_len: int
+) -> str:
     """Convert unvocalized Hebrew text to IPA using the classifier model."""
     encoding = tokenizer(
         text,
@@ -155,23 +201,26 @@ def phonemize(text: str, model: HebrewG2PClassifier, tokenizer, device: torch.de
         return_offsets_mapping=True,
         return_tensors="pt",
     )
-    offset_mapping = encoding.pop("offset_mapping")[0].tolist()  # [S, 2]
+    offset_mapping = encoding.pop("offset_mapping")[0].tolist()  
     input_ids = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
 
-    with torch.no_grad():
+    # Use hardware acceleration if available
+    autocast_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+    with torch.no_grad(), torch.autocast(device_type=device.type, dtype=autocast_dtype, enabled=device.type=="cuda"):
         out = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            tokenizer_vocab=build_tokenizer_vocab(tokenizer),
+            tokenizer_vocab=vocab_cache, # Passed statically instead of rebuilding
         )
 
     return _decode(
         text=text,
         offset_mapping=offset_mapping,
-        consonant_logits=out["consonant_logits"][0],
-        vowel_logits=out["vowel_logits"][0],
-        stress_logits=out["stress_logits"][0],
+        consonant_logits=out["consonant_logits"][0].float(), # Cast back to fp32 for argmax/math
+        vowel_logits=out["vowel_logits"][0].float(),
+        stress_logits=out["stress_logits"][0].float(),
     )
 
 
@@ -180,11 +229,13 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     tokenizer = load_encoder_tokenizer()
+    vocab_cache = build_tokenizer_vocab(tokenizer)
+    
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
 
-    print(phonemize(args.text, model, tokenizer, device, args.max_len))
+    print(phonemize(args.text, model, tokenizer, vocab_cache, device, args.max_len))
 
 
 if __name__ == "__main__":

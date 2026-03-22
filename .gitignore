@@ -28,3 +28,4 @@ model-he/
 *.npy
 *.wav
 *.tar.gz
+*.sh

@@ -1,10 +1,15 @@
-"""Hebrew G2P classifier model — per-character prediction of consonant, vowel, and stress."""
+"""Hebrew G2P classifier model — per-character prediction of consonant, vowel, and stress.
+Upgraded with NeoBERT/ModernBERT architecture (RoPE, SwiGLU, RMSNorm).
+"""
 
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
+
+# Import the NeoBERT architecture from your local file
+from encoder.neobert import NeoBERT, NeoBERTConfig
 
 from constants import (
     ENCODER_MODEL,
@@ -34,9 +39,35 @@ class HebrewG2PClassifier(nn.Module):
     def __init__(self, encoder_model: str = ENCODER_MODEL, dropout_rate: float = 0.1) -> None:
         super().__init__()
 
-        encoder = AutoModel.from_pretrained(encoder_model, trust_remote_code=True)
-        self.encoder = unwrap_encoder_model(encoder)
+        # 1. Load the original DictaBERT blueprint and pre-trained weights
+        dicta_config = AutoConfig.from_pretrained(encoder_model, trust_remote_code=True)
+        dicta_pretrained = AutoModel.from_pretrained(encoder_model, trust_remote_code=True)
+        dicta_base = unwrap_encoder_model(dicta_pretrained)
+
+        # 2. Map DictaBERT's exact dimensions to the NeoBERT config
+        neo_config = NeoBERTConfig(
+            vocab_size=dicta_config.vocab_size,
+            pad_token_id=dicta_config.pad_token_id,
+            hidden_size=dicta_config.hidden_size,                 
+            num_hidden_layers=dicta_config.num_hidden_layers,     
+            num_attention_heads=dicta_config.num_attention_heads, 
+            intermediate_size=dicta_config.intermediate_size,     
+            max_length=dicta_config.max_position_embeddings       
+        )
+
+        # 3. Initialize the modern architecture (NeoBERT)
+        self.encoder = NeoBERT(neo_config)
         hidden_size = self.encoder.config.hidden_size
+
+        # 4. TRANSPLANT: Copy DictaBERT's pre-trained character embeddings
+        # NeoBERT's embedding layer is self.encoder.encoder
+        # DictaBERT's embedding layer is dicta_base.embeddings.word_embeddings
+        with torch.no_grad():
+            self.encoder.encoder.weight.copy_(dicta_base.embeddings.word_embeddings.weight)
+            
+        # Free up memory (we don't need the old DictaBERT layers taking up VRAM)
+        del dicta_pretrained
+        del dicta_base
 
         self.dropout = nn.Dropout(dropout_rate)
 
@@ -46,8 +77,6 @@ class HebrewG2PClassifier(nn.Module):
         self.stress_head = nn.Linear(hidden_size, NUM_STRESS_CLASSES)
 
         # Precompute consonant mask: [vocab_size, NUM_CONSONANT_CLASSES]
-        # mask[i, j] = True means consonant class j is FORBIDDEN for Hebrew letter i
-        # Built once at init, moved to device on first forward pass
         self._consonant_mask: torch.Tensor | None = None
         self._build_consonant_mask()
 
@@ -55,11 +84,9 @@ class HebrewG2PClassifier(nn.Module):
         """
         Build a boolean mask [num_hebrew_letters, NUM_CONSONANT_CLASSES].
         True = this consonant class is forbidden for this letter.
-        Hebrew letters are indexed by (ord(char) - ord('א')).
         """
         from constants import ALEF_ORD, TAF_ORD
         n_letters = TAF_ORD - ALEF_ORD + 1
-        # Start with all forbidden, then allow the valid ones
         mask = torch.ones(n_letters, NUM_CONSONANT_CLASSES, dtype=torch.bool)
         for char, allowed_ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items():
             idx = ord(char) - ALEF_ORD
@@ -74,12 +101,7 @@ class HebrewG2PClassifier(nn.Module):
         tokenizer_vocab: dict[int, str],
     ) -> torch.Tensor:
         """
-        Zero out forbidden consonant classes for each position based on the
-        input Hebrew character at that position.
-
-        consonant_logits: [B, S, NUM_CONSONANT_CLASSES]
-        input_ids:        [B, S]
-        tokenizer_vocab:  maps token_id -> character string
+        Zero out forbidden consonant classes for each position based on the input character.
         """
         from constants import ALEF_ORD
         mask = self._consonant_mask.to(consonant_logits.device)
@@ -100,17 +122,22 @@ class HebrewG2PClassifier(nn.Module):
     def forward(
         self,
         input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
         consonant_labels: torch.Tensor | None = None,
         vowel_labels: torch.Tensor | None = None,
         stress_labels: torch.Tensor | None = None,
         tokenizer_vocab: dict[int, str] | None = None,
+        **kwargs,
     ) -> dict[str, torch.Tensor]:
+        
+        # NeoBERT forward pass
         encoder_outputs = self.encoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            return_dict=True,
+            **kwargs,
         )
+        
+        # NeoBERT natively returns a BaseModelOutput object with last_hidden_state
         hidden = self.dropout(encoder_outputs.last_hidden_state)  # [B, S, H]
 
         consonant_logits = self.consonant_head(hidden)  # [B, S, NUM_CONSONANT_CLASSES]
@@ -139,8 +166,10 @@ class HebrewG2PClassifier(nn.Module):
         return output
 
     def parameter_groups(self, encoder_lr: float, head_lr: float, weight_decay: float) -> list[dict]:
-        """Discriminative LRs: lower for encoder, higher for classification heads."""
-        no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight"}
+        """Discriminative LRs updated to target NeoBERT's RMSNorm layers."""
+        
+        # NeoBERT uses RMSNorm (attention_norm, ffn_norm, layer_norm) instead of LayerNorm
+        no_decay = {"bias", "attention_norm.weight", "ffn_norm.weight", "layer_norm.weight"}
 
         def is_no_decay(name: str) -> bool:
             return any(term in name for term in no_decay)
