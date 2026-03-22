@@ -17,7 +17,7 @@ import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from constants import CONSONANTS, VOWELS
+from constants import CONSONANTS, VOWELS, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
 from infer import load_checkpoint
 from model import HebrewG2PClassifier
 from tokenization import load_encoder_tokenizer
@@ -85,6 +85,10 @@ def main():
     entry = meta.add()
     entry.key = "vowel_vocab"
     entry.value = json.dumps({str(i): v for i, v in enumerate(VOWELS)})
+
+    entry = meta.add()
+    entry.key = "letter_consonant_constraints"
+    entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
 
     entry = meta.add()
     entry.key = "cls_token_id"

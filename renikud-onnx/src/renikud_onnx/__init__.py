@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 
 import numpy as np
@@ -26,6 +27,9 @@ class G2P:
         self._vowel_vocab: dict[int, str] = {int(k): v for k, v in json.loads(meta["vowel_vocab"]).items()}
         self._cls_id = int(meta["cls_token_id"])
         self._sep_id = int(meta["sep_token_id"])
+        self._letter_constraints: dict[str, list[int]] = {
+            k: v for k, v in json.loads(meta["letter_consonant_constraints"]).items()
+        }
 
     def _tokenize(self, text: str) -> tuple[list[int], list[int], list[tuple[int, int]]]:
         """Tokenize character by character, return ids, mask, and offset mapping."""
@@ -41,6 +45,22 @@ class G2P:
         mask = [1] * len(ids)
         return ids, mask, offsets
 
+    def _best_stress_per_word(self, offsets: list[tuple[int, int]], text: str, stress_logits: np.ndarray) -> set[int]:
+        word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
+        words: dict[int, list[int]] = {i: [] for i in range(len(word_spans))}
+        for tok_idx, (start, end) in enumerate(offsets):
+            if end - start != 1:
+                continue
+            for word_idx, (ws, we) in enumerate(word_spans):
+                if ws <= start < we:
+                    words[word_idx].append(tok_idx)
+                    break
+        stressed: set[int] = set()
+        for toks in words.values():
+            if toks:
+                stressed.add(max(toks, key=lambda t: stress_logits[t, 1]))
+        return stressed
+
     def phonemize(self, text: str) -> str:
         normalized = unicodedata.normalize("NFD", text)
         ids, mask, offsets = self._tokenize(text)
@@ -55,7 +75,7 @@ class G2P:
         # logits shape: [1, seq_len, num_classes]
         consonant_preds = consonant_logits[0].argmax(axis=-1)
         vowel_preds = vowel_logits[0].argmax(axis=-1)
-        stress_preds = stress_logits[0].argmax(axis=-1)
+        stressed_positions = self._best_stress_per_word(offsets, normalized, stress_logits[0])
 
         result = []
         prev_end = 0
@@ -75,12 +95,19 @@ class G2P:
             prev_end = end
 
             if not _is_hebrew(char):
-                result.append(char)
+                if char == "'" and start > 0 and normalized[start - 1] in "גזצץ":
+                    pass
+                else:
+                    result.append(char)
                 continue
 
-            consonant = self._consonant_vocab.get(int(consonant_preds[tok_idx]), "∅")
+            cid = int(consonant_preds[tok_idx])
+            allowed = self._letter_constraints.get(char)
+            if allowed is not None and cid not in allowed:
+                cid = max(allowed, key=lambda x: consonant_logits[0][tok_idx, x])
+            consonant = self._consonant_vocab.get(cid, "∅")
             vowel = self._vowel_vocab.get(int(vowel_preds[tok_idx]), "∅")
-            stress = int(stress_preds[tok_idx]) == 1
+            stress = tok_idx in stressed_positions
 
             chunk = ""
             if consonant != "∅":
