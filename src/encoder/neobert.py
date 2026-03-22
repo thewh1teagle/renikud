@@ -69,7 +69,7 @@ from transformers.modeling_outputs import (
     SequenceClassifierOutput,
 )
 
-from rotary import precompute_freqs_cis, apply_rotary_emb
+from encoder.rotary import precompute_freqs_cis, apply_rotary_emb
 
 
 class DataCollatorWithPacking(DataCollatorForLanguageModeling):
