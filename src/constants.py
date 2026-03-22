@@ -40,36 +40,38 @@ STRESS_YES: Final[int] = 1
 # ---------------------------------------------------------------------------
 # 4. Per-letter allowed consonant IDs (for logit masking)
 # Only these consonant classes are valid for each Hebrew letter.
-# ∅ (index 0) is always included — any letter can be silent in edge cases.
+# ∅ (index 0) is included only for letters that can genuinely be silent:
+#   א, ע (quiescent), ה (word-final mater lectionis), ו, י (matres lectionis).
+# All other letters always produce a consonant in Modern Hebrew.
 # ---------------------------------------------------------------------------
 HEBREW_LETTER_TO_ALLOWED_CONSONANTS: Final[dict[str, tuple[int, ...]]] = {
     "א": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ʔ"]),
-    "ב": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["b"], CONSONANT_TO_ID["v"]),
-    "ג": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ɡ"], CONSONANT_TO_ID["dʒ"]),
-    "ד": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["d"]),
+    "ב": (CONSONANT_TO_ID["b"], CONSONANT_TO_ID["v"]),
+    "ג": (CONSONANT_TO_ID["ɡ"], CONSONANT_TO_ID["dʒ"]),
+    "ד": (CONSONANT_TO_ID["d"],),
     "ה": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["h"]),
     "ו": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["v"], CONSONANT_TO_ID["w"]),
-    "ז": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["z"], CONSONANT_TO_ID["ʒ"]),
+    "ז": (CONSONANT_TO_ID["z"], CONSONANT_TO_ID["ʒ"]),
     "ח": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["χ"]),
-    "ט": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["t"]),
+    "ט": (CONSONANT_TO_ID["t"],),
     "י": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["j"]),
-    "כ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["k"], CONSONANT_TO_ID["χ"]),
-    "ך": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["k"], CONSONANT_TO_ID["χ"]),
-    "ל": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["l"]),
-    "מ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["m"]),
-    "ם": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["m"]),
-    "נ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["n"]),
-    "ן": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["n"]),
-    "ס": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["s"]),
+    "כ": (CONSONANT_TO_ID["k"], CONSONANT_TO_ID["χ"]),
+    "ך": (CONSONANT_TO_ID["k"], CONSONANT_TO_ID["χ"]),
+    "ל": (CONSONANT_TO_ID["l"],),
+    "מ": (CONSONANT_TO_ID["m"],),
+    "ם": (CONSONANT_TO_ID["m"],),
+    "נ": (CONSONANT_TO_ID["n"],),
+    "ן": (CONSONANT_TO_ID["n"],),
+    "ס": (CONSONANT_TO_ID["s"],),
     "ע": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ʔ"]),
-    "פ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["p"], CONSONANT_TO_ID["f"]),
-    "ף": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["p"], CONSONANT_TO_ID["f"]),
-    "צ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ts"], CONSONANT_TO_ID["tʃ"]),
-    "ץ": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ts"], CONSONANT_TO_ID["tʃ"]),
-    "ק": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["k"]),
-    "ר": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ʁ"]),
-    "ש": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["ʃ"], CONSONANT_TO_ID["s"]),
-    "ת": (CONSONANT_TO_ID["∅"], CONSONANT_TO_ID["t"]),
+    "פ": (CONSONANT_TO_ID["p"], CONSONANT_TO_ID["f"]),
+    "ף": (CONSONANT_TO_ID["p"], CONSONANT_TO_ID["f"]),
+    "צ": (CONSONANT_TO_ID["ts"], CONSONANT_TO_ID["tʃ"]),
+    "ץ": (CONSONANT_TO_ID["ts"], CONSONANT_TO_ID["tʃ"]),
+    "ק": (CONSONANT_TO_ID["k"],),
+    "ר": (CONSONANT_TO_ID["ʁ"],),
+    "ש": (CONSONANT_TO_ID["ʃ"], CONSONANT_TO_ID["s"]),
+    "ת": (CONSONANT_TO_ID["t"],),
 }
 
 # Hebrew Unicode range א-ת
