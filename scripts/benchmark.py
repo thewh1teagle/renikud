@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--gt", type=str, default="gt.tsv")
     parser.add_argument("--ignore-punct", action="store_true")
-    parser.add_argument("--save-results", type=str, help="Path to save the full predictions TSV")
+    parser.add_argument("--save", type=str, help="Path to save the full predictions TSV")
     args = parser.parse_args()
 
     if not Path(args.gt).exists():
@@ -80,13 +80,13 @@ def main():
     print(f"  WER: {jiwer.wer(refs, hyps):.4f}")
     print(f"  Acc: {1 - jiwer.wer(refs, hyps):.1%}")
 
-    if args.save_results:
-        with open(args.save_results, "w", encoding="utf-8") as f:
+    if args.save:
+        with open(args.save, "w", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter="\t")
             writer.writerow(["Sentence", "GT", "Prediction"])
             for item, pred in zip(gt_data, hyps):
                 writer.writerow([item["sentence"], item["phonemes"], pred])
-        print(f"\nSaved full results to {args.save_results}")
+        print(f"\nSaved full results to {args.save}")
 
 
 if __name__ == "__main__":
