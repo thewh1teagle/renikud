@@ -1,8 +1,9 @@
 """Constants for the Hebrew G2P classifier model."""
 
+from pathlib import Path
 from typing import Final
 
-ENCODER_MODEL: Final[str] = "dicta-il/dictabert-large-char-menaked"
+TOKENIZER_PATH: Final[Path] = Path(__file__).parent / "tokenizer.json"
 MAX_LEN: Final[int] = 256
 
 # ---------------------------------------------------------------------------

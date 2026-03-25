@@ -18,10 +18,11 @@ from constants import (
     CONSONANT_TO_ID,
     STRESS_YES,
     MAX_LEN,
+    TOKENIZER_PATH,
     is_hebrew_letter,
 )
 from model import HebrewG2PClassifier
-from tokenization import load_encoder_tokenizer
+from tokenization import load_tokenizer
 
 
 def parse_args():
@@ -182,7 +183,7 @@ def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = load_encoder_tokenizer()
+    tokenizer = load_tokenizer(TOKENIZER_PATH)
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()

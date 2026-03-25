@@ -1,30 +1,89 @@
-"""Tokenization helpers for Hebrew G2P."""
+"""Character-level tokenizer for Hebrew G2P.
+
+Vocab:
+  - Special tokens: [PAD], [CLS], [SEP], [UNK], [MASK]
+  - Hebrew letters: alef-tav (including final forms)
+  - ASCII lowercase + digits + punctuation + space
+  - Hebrew punctuation: maqaf, geresh, gershayim
+
+Normalizer:
+  - NFKC
+  - Lowercase
+  - StripAccents
+"""
 
 from __future__ import annotations
 
-from functools import lru_cache
+import string
+import unicodedata
+from pathlib import Path
 
-from huggingface_hub import hf_hub_download
+from tokenizers import Tokenizer, AddedToken
+from tokenizers.models import WordPiece
+from tokenizers.normalizers import Sequence, NFKC, Lowercase, StripAccents
+from tokenizers.pre_tokenizers import Split
+from tokenizers.processors import TemplateProcessing
+from tokenizers import Regex
 from transformers import PreTrainedTokenizerFast
 
-from constants import ENCODER_MODEL
+
+SPECIAL_TOKENS = ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"]
 
 
-def unwrap_encoder_model(encoder):
-    """Unwrap Dicta's diacritization model wrapper when present."""
-    return encoder.bert if hasattr(encoder, "bert") else encoder
+def build_vocab() -> dict[str, int]:
+    hebrew = [
+        chr(cp)
+        for cp in range(0x05D0, 0x05EB)
+        if unicodedata.category(chr(cp)) == "Lo"
+    ]
+    # Hebrew punctuation — see https://en.wikipedia.org/wiki/Unicode_and_HTML_for_the_Hebrew_alphabet
+    hebrew_punct = [
+        "\u05BE",  # maqaf (Hebrew hyphen)
+        "\u05F3",  # geresh
+        "\u05F4",  # gershayim
+    ]
+    chars = (
+        list(string.ascii_lowercase)
+        + list(string.digits)
+        + list(string.punctuation)
+        + [" "]
+        + hebrew
+        + hebrew_punct
+    )
+
+    vocab = {tok: i for i, tok in enumerate(SPECIAL_TOKENS)}
+    for c in chars:
+        if c not in vocab:
+            vocab[c] = len(vocab)
+    return vocab
 
 
-@lru_cache(maxsize=1)
-def load_encoder_tokenizer(model_name: str = ENCODER_MODEL) -> PreTrainedTokenizerFast:
-    """
-    Load the encoder tokenizer securely.
-    Bypasses the broken AutoTokenizer logic for character-level models.
-    """
-    tokenizer_file = hf_hub_download(repo_id=model_name, filename="tokenizer.json")
+def build_tokenizer() -> Tokenizer:
+    vocab = build_vocab()
 
+    tokenizer = Tokenizer(WordPiece(vocab, unk_token="[UNK]", continuing_subword_prefix="##"))
+    tokenizer.normalizer = Sequence([NFKC(), Lowercase(), StripAccents()])
+    tokenizer.pre_tokenizer = Split(pattern=Regex("[\\s\\S]"), behavior="isolated")
+
+    cls_id = vocab["[CLS]"]
+    sep_id = vocab["[SEP]"]
+    tokenizer.post_processor = TemplateProcessing(
+        single="[CLS] $A [SEP]",
+        pair="[CLS] $A [SEP] $B:1 [SEP]:1",
+        special_tokens=[("[CLS]", cls_id), ("[SEP]", sep_id)],
+    )
+    tokenizer.add_special_tokens([AddedToken(t, special=True) for t in SPECIAL_TOKENS])
+
+    return tokenizer
+
+
+def save_tokenizer(path: str | Path) -> None:
+    build_tokenizer().save(str(path))
+
+
+def load_tokenizer(path: str | Path) -> PreTrainedTokenizerFast:
     return PreTrainedTokenizerFast(
-        tokenizer_file=tokenizer_file,
+        tokenizer_file=str(path),
         unk_token="[UNK]",
         sep_token="[SEP]",
         pad_token="[PAD]",

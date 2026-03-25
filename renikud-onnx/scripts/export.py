@@ -17,20 +17,20 @@ import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from constants import CONSONANTS, VOWELS, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
+from constants import CONSONANTS, VOWELS, TOKENIZER_PATH, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
 from infer import load_checkpoint
 from model import HebrewG2PClassifier
-from tokenization import load_encoder_tokenizer
+from tokenization import load_tokenizer
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", default="model.onnx")
-    parser.add_argument("--int8", action="store_true", help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
+    parser.add_argument("--int8", action=argparse.BooleanOptionalAction, default=True, help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
     args = parser.parse_args()
 
-    tokenizer = load_encoder_tokenizer()
+    tokenizer = load_tokenizer(TOKENIZER_PATH)
     vocab = tokenizer.get_vocab()  # {token: id}
     tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
 
