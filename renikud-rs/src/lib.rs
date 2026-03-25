@@ -25,6 +25,10 @@ pub struct G2P {
 impl G2P {
     pub fn new(model_path: &str) -> anyhow::Result<Self> {
         let session = Session::builder()?.commit_from_file(model_path)?;
+        Self::from_session(session)
+    }
+
+    pub fn from_session(session: Session) -> anyhow::Result<Self> {
         let (vocab_json, consonant_vocab_json, vowel_vocab_json, letter_consonant_mask_json, cls_id, sep_id) = {
             let meta = session.metadata()?;
             let vocab_json = meta.custom("vocab").ok_or_else(|| anyhow::anyhow!("missing vocab"))?;
