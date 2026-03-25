@@ -20,7 +20,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from model import HebrewG2PClassifier
 from infer import load_checkpoint, phonemize
-from tokenization import load_encoder_tokenizer
+from tokenization import load_tokenizer
 from constants import MAX_LEN
 
 PUNCT = str.maketrans("", "", ".,?!")
@@ -47,7 +47,7 @@ def main():
         return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = load_encoder_tokenizer()
+    tokenizer = load_tokenizer(Path(__file__).parent.parent / "src" / "tokenizer.json")
     model = HebrewG2PClassifier()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
