@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import torch
@@ -60,7 +61,6 @@ def _best_stress_per_word(offset_mapping: list[tuple[int, int]], text: str, stre
     the one with the highest stress logit score among those that predicted stress.
     Returns a set of token indices that are allowed to emit stress.
     """
-    import re
     # Group single-char token indices by word span
     word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
     words: dict[int, list[int]] = {i: [] for i in range(len(word_spans))}
