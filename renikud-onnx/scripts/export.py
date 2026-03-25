@@ -98,6 +98,10 @@ def main():
     entry.key = "sep_token_id"
     entry.value = str(tokenizer.sep_token_id)
 
+    entry = meta.add()
+    entry.key = "letter_consonant_mask"
+    entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
+
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
 
     data_file = Path(args.output + ".data")

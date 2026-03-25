@@ -20,7 +20,7 @@ from pathlib import Path
 import jiwer
 
 PUNCT = str.maketrans("", "", ".,?!")
-REPO_DIR = Path(__file__).parent.parent
+REPO_DIR = Path(__file__).parent.parent.parent
 
 
 def build(release: bool = True) -> Path:
