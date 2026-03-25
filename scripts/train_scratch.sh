@@ -5,4 +5,5 @@ uv run src/train.py \
   --train-dataset dataset/.cache/train \
   --eval-dataset dataset/.cache/val \
   --output-dir outputs/g2p-classifier \
-  --train-batch-size 16
+  --train-batch-size 16 \
+  ${1:+--init-from-checkpoint "$1"}
