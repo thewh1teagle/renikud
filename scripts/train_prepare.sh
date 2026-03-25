@@ -3,6 +3,8 @@ set -euo pipefail
 
 INPUT=${1:?"Usage: $0 <input.tsv>"}
 
+uv run python -c "import sys; sys.path.insert(0, 'src'); from tokenization import save_tokenizer; save_tokenizer('src/tokenizer.json')"
+
 uv run scripts/split_dataset.py "$INPUT" dataset/train.tsv dataset/val.tsv
 
 uv run src/align_data.py dataset/train.tsv dataset/train_alignment.jsonl

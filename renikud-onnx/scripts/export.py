@@ -63,7 +63,7 @@ def main():
             "vowel_logits": {0: "batch", 1: "seq_len"},
             "stress_logits": {0: "batch", 1: "seq_len"},
         },
-        opset_version=17,
+        opset_version=18,
     )
 
     if args.int8:
