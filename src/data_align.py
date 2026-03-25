@@ -5,7 +5,7 @@ Each Hebrew letter is assigned exactly one IPA chunk (consonant + optional vowel
 The alignment is constrained by the known possible phonemes per Hebrew letter.
 
 Usage:
-    uv run src/align_data.py dataset/train.txt ./dataset/train_alignment.jsonl
+    uv run src/data_align.py dataset/train.tsv ./dataset/train_alignment.jsonl
 
 Input TSV:   hebrew_text<TAB>ipa_text  (one sentence per line, Hebrew may have nikud)
 Output JSONL: one JSON object per line, key=hebrew sentence, value=[[char, ipa_chunk], ...]

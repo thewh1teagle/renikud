@@ -1,13 +1,13 @@
 """
 Prepare tokenized Arrow dataset from aligned JSONL for classifier training.
 
-Reads train_alignment.jsonl produced by align_data.py and produces an Arrow
+Reads train_alignment.jsonl produced by data_align.py and produces an Arrow
 dataset with per-character consonant, vowel, and stress labels aligned to
 BERT token positions.
 
 Usage:
-    uv run src/prepare_tokens.py dataset/train_alignment.jsonl dataset/.cache/classifier-train
-    uv run src/prepare_tokens.py dataset/val_alignment.jsonl dataset/.cache/classifier-val
+    uv run src/data_tokenize.py dataset/train_alignment.jsonl dataset/.cache/train
+    uv run src/data_tokenize.py dataset/val_alignment.jsonl dataset/.cache/val
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ def process_sentence(
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare classifier training tokens from aligned JSONL")
-    parser.add_argument("input", help="Input JSONL file (from align_data.py)")
+    parser.add_argument("input", help="Input JSONL file (from data_align.py)")
     parser.add_argument("output", help="Output Arrow dataset directory")
     parser.add_argument("--workers", type=int, default=mp.cpu_count())
     args = parser.parse_args()
