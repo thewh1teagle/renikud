@@ -8,6 +8,7 @@ uv run accelerate launch src/train.py \
   --eval-dataset dataset/.cache/val \
   --output-dir outputs/g2p-classifier-ft \
   --init-from-checkpoint "$CHECKPOINT" \
+  --init-weights-only \
   --encoder-lr 2e-6 \
   --head-lr 1e-5 \
   --warmup-steps 200

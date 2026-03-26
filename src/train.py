@@ -72,9 +72,9 @@ def main():
         model, optimizer, train_loader, eval_loader, scheduler
     )
 
-    # Restore step counter when resuming
+    # Restore step counter when resuming (skipped when --init-weights-only)
     opt_step = 0
-    if args.init_from_checkpoint:
+    if args.init_from_checkpoint and not args.init_weights_only:
         import json
         state_path = Path(args.init_from_checkpoint) / "train_state.json"
         if state_path.exists():

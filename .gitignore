@@ -29,3 +29,4 @@ model-he/
 *.npy
 *.wav
 *.tar.gz
+backup_checkpoints/
