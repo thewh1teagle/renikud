@@ -136,7 +136,13 @@ one consonant (or silence) and optionally a vowel and stress. The model learns t
 exceptions (context-dependent allophones) from surrounding characters.
 
 ### What Happened
-The model learned very fast. Per-character classification solved all the CTC pain:
+The model learned very fast. Per-character classification solved all the CTC pain.
+
+However, `transformers` has no built-in architecture for this setup — a from-scratch
+encoder with a custom vocab and custom classification heads isn't something you can
+just config into HuggingFace. The result was that the code started to bloat:
+custom model class, custom config, custom weight init, wiring around the HF trainer
+abstractions. It worked but it was getting unwieldy.
 - Exactly one stress per word (enforced at inference)
 - Clean pass-through for non-Hebrew characters
 - No length constraints, no upsample tricks
