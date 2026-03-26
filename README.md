@@ -59,11 +59,18 @@ Or the Rust crate — see `renikud-rs/`.
 ## Upload Checkpoint to HuggingFace
 
 ```console
-uv run hf upload thewh1teagle/renikud outputs/g2p-classifier/checkpoint-1500 --include "model.safetensors" --commit-message "add weights"
+./scripts/upload_checkpoint.sh outputs/g2p-classifier/checkpoint-5000
 ```
 
 ## Download Checkpoint
 
 ```console
-uv run hf download thewh1teagle/renikud model.safetensors --local-dir .
+./scripts/download_checkpoint.sh                  # downloads to ./checkpoint
+```
+
+To fine-tune from a downloaded checkpoint:
+
+```console
+./scripts/download_checkpoint.sh checkpoint
+./scripts/train_finetune.sh checkpoint
 ```
