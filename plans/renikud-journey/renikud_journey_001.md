@@ -100,6 +100,13 @@ But there were real frustrations:
 - Tokenizer: same model's character-level tokenizer (841-token vocab including nikud chars)
 - Consonant masking already in place
 
+### Benchmark Expansion
+During this phase the benchmark was expanded from 100 to 250 sentences. The new sentences
+were hard, ambiguous cases generated with Gemini 2.5 Pro (excellent at crafting tricky
+Hebrew homophones and context-dependent words). IPA labels were produced by the model
+then corrected manually. This harder benchmark became the standard for all subsequent
+evaluation.
+
 ### What Happened
 This was the bridge version — proved that per-character classification + IPA output
 works well with the DictaBERT backbone. The architecture was solid but came with baggage:
