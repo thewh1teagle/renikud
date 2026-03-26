@@ -100,6 +100,11 @@ But there were real frustrations:
 - Tokenizer: same model's character-level tokenizer (841-token vocab including nikud chars)
 - Consonant masking already in place
 
+### Training Data
+Beyond the Knesset/teacher-distilled data, the model was also trained on transcriptions
+from ~2000 hours of Hebrew audio using an IPA ASR pipeline — giving it exposure to
+real spoken Hebrew pronunciation patterns at scale.
+
 ### Benchmark Expansion
 During this phase the benchmark was expanded from 100 to 250 sentences. The new sentences
 were hard, ambiguous cases generated with Gemini 2.5 Pro (excellent at crafting tricky
