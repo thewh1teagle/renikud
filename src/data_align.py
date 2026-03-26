@@ -5,7 +5,7 @@ Each Hebrew letter is assigned exactly one IPA chunk (consonant + optional vowel
 The alignment is constrained by the known possible phonemes per Hebrew letter.
 
 Usage:
-    uv run src/align_data.py dataset/train.txt ./dataset/train_alignment.jsonl
+    uv run src/data_align.py dataset/train.tsv ./dataset/train_alignment.jsonl
 
 Input TSV:   hebrew_text<TAB>ipa_text  (one sentence per line, Hebrew may have nikud)
 Output JSONL: one JSON object per line, key=hebrew sentence, value=[[char, ipa_chunk], ...]
@@ -15,6 +15,7 @@ Output JSONL: one JSON object per line, key=hebrew sentence, value=[[char, ipa_c
 import argparse
 import json
 import unicodedata
+import multiprocessing as mp
 import regex as re
 from tqdm import tqdm
 
@@ -203,10 +204,30 @@ def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
     return result
 
 
+def process_chunk(lines: list[str]) -> list[tuple[str, list | None, str] | None]:
+    """Align a batch of TSV lines. Returns list of (heb, result, ipa) or None to skip."""
+    out = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            out.append(None)
+            continue
+        parts = line.split("\t")
+        if len(parts) != 2:
+            out.append(None)
+            continue
+        heb_raw, ipa = parts
+        heb = strip_nikud(heb_raw)
+        result = align_sentence(heb, ipa)
+        out.append((heb, result, ipa))
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description="Align Hebrew chars to IPA chunks via DP")
     parser.add_argument("input", help="Input TSV file (hebrew<TAB>ipa)")
     parser.add_argument("output", help="Output JSONL file (one sentence per line)")
+    parser.add_argument("--workers", type=int, default=mp.cpu_count())
     args = parser.parse_args()
 
     total = 0
@@ -214,31 +235,28 @@ def main():
     failed_count = 0
 
     failures_path = args.output.replace(".jsonl", "_failures.txt")
-    with open(args.input, encoding="utf-8") as fin, \
-         open(args.output, "w", encoding="utf-8") as fout, \
-         open(failures_path, "w", encoding="utf-8") as ffail:
-
+    with open(args.input, encoding="utf-8") as fin:
         lines = fin.readlines()
-        for line in tqdm(lines, desc="Aligning"):
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split("\t")
-            if len(parts) != 2:
-                continue
 
-            heb_raw, ipa = parts
-            heb = strip_nikud(heb_raw)
-            total += 1
+    chunk_size = max(1, len(lines) // (args.workers * 4))
+    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
-            result = align_sentence(heb, ipa)
-            if result is None:
-                failed_count += 1
-                ffail.write(f"{heb}\t{ipa}\n")
-                continue
+    with open(args.output, "w", encoding="utf-8") as fout, \
+         open(failures_path, "w", encoding="utf-8") as ffail, \
+         mp.Pool(args.workers) as pool:
 
-            aligned_count += 1
-            fout.write(json.dumps({heb: result}, ensure_ascii=False) + "\n")
+        for batch in tqdm(pool.imap(process_chunk, chunks), total=len(chunks), desc="Aligning"):
+            for item in batch:
+                if item is None:
+                    continue
+                heb, result, ipa = item
+                total += 1
+                if result is None:
+                    failed_count += 1
+                    ffail.write(f"{heb}\t{ipa}\n")
+                else:
+                    aligned_count += 1
+                    fout.write(json.dumps({heb: result}, ensure_ascii=False) + "\n")
 
     print(f"\nTotal:    {total:,}")
     print(f"Aligned:  {aligned_count:,} ({aligned_count/total:.1%})")

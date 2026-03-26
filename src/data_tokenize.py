@@ -1,19 +1,20 @@
 """
 Prepare tokenized Arrow dataset from aligned JSONL for classifier training.
 
-Reads train_alignment.jsonl produced by align_data.py and produces an Arrow
+Reads train_alignment.jsonl produced by data_align.py and produces an Arrow
 dataset with per-character consonant, vowel, and stress labels aligned to
 BERT token positions.
 
 Usage:
-    uv run src/prepare_tokens.py dataset/train_alignment.jsonl dataset/.cache/classifier-train
-    uv run src/prepare_tokens.py dataset/val_alignment.jsonl dataset/.cache/classifier-val
+    uv run src/data_tokenize.py dataset/train_alignment.jsonl dataset/.cache/train
+    uv run src/data_tokenize.py dataset/val_alignment.jsonl dataset/.cache/val
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing as mp
 from pathlib import Path
 
 import datasets
@@ -27,10 +28,35 @@ from constants import (
     IGNORE_INDEX,
     is_hebrew_letter,
 )
-from tokenization import load_encoder_tokenizer
+from constants import TOKENIZER_PATH
+from tokenization import load_tokenizer
 
 STRESS_MARK = "ˈ"
 VOWELS_SET = set("aeiou")
+
+_worker_tokenizer = None
+
+
+def _init_worker():
+    global _worker_tokenizer
+    _worker_tokenizer = load_tokenizer(TOKENIZER_PATH)
+
+
+def process_chunk(lines: list[str]) -> tuple[list[dict], int]:
+    records = []
+    skipped = 0
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        hebrew, alignment = next(iter(obj.items()))
+        record = process_sentence(hebrew, alignment, _worker_tokenizer)
+        if record is None:
+            skipped += 1
+        else:
+            records.append(record)
+    return records, skipped
 
 
 def parse_ipa_chunk(chunk: str) -> tuple[str, str, int]:
@@ -160,35 +186,29 @@ def process_sentence(
 
 def main():
     parser = argparse.ArgumentParser(description="Prepare classifier training tokens from aligned JSONL")
-    parser.add_argument("input", help="Input JSONL file (from align_data.py)")
+    parser.add_argument("input", help="Input JSONL file (from data_align.py)")
     parser.add_argument("output", help="Output Arrow dataset directory")
+    parser.add_argument("--workers", type=int, default=mp.cpu_count())
     args = parser.parse_args()
-
-    tokenizer = load_encoder_tokenizer()
-
-    records = []
-    skipped = 0
 
     with open(args.input, encoding="utf-8") as f:
         lines = f.readlines()
 
-    for line in tqdm(lines, desc="Tokenizing"):
-        line = line.strip()
-        if not line:
-            continue
-        obj = json.loads(line)
-        hebrew, alignment = next(iter(obj.items()))
+    chunk_size = max(1, len(lines) // (args.workers * 4))
+    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
-        record = process_sentence(hebrew, alignment, tokenizer)
-        if record is None:
-            skipped += 1
-            continue
-        records.append(record)
+    all_records = []
+    total_skipped = 0
 
-    print(f"\nProcessed: {len(records):,}")
-    print(f"Skipped:   {skipped:,}")
+    with mp.Pool(args.workers, initializer=_init_worker) as pool:
+        for records, skipped in tqdm(pool.imap(process_chunk, chunks), total=len(chunks), desc="Tokenizing"):
+            all_records.extend(records)
+            total_skipped += skipped
 
-    dataset = datasets.Dataset.from_list(records)
+    print(f"\nProcessed: {len(all_records):,}")
+    print(f"Skipped:   {total_skipped:,}")
+
+    dataset = datasets.Dataset.from_list(all_records)
     dataset.save_to_disk(args.output)
     print(f"Saved to:  {args.output}")
 

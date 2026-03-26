@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from transformers import AutoModel
-
 from constants import (
-    ENCODER_MODEL,
     NUM_CONSONANT_CLASSES,
     NUM_VOWEL_CLASSES,
     NUM_STRESS_CLASSES,
@@ -15,7 +12,7 @@ from constants import (
     IGNORE_INDEX,
     is_hebrew_letter,
 )
-from tokenization import unwrap_encoder_model
+from encoder import build_encoder
 
 
 class HebrewG2PClassifier(nn.Module):
@@ -31,11 +28,10 @@ class HebrewG2PClassifier(nn.Module):
     through unchanged at inference — the heads are never called for them.
     """
 
-    def __init__(self, encoder_model: str = ENCODER_MODEL, dropout_rate: float = 0.1) -> None:
+    def __init__(self, dropout_rate: float = 0.1) -> None:
         super().__init__()
 
-        encoder = AutoModel.from_pretrained(encoder_model, trust_remote_code=True)
-        self.encoder = unwrap_encoder_model(encoder)
+        self.encoder = build_encoder()
         hidden_size = self.encoder.config.hidden_size
 
         self.dropout = nn.Dropout(dropout_rate)
@@ -140,7 +136,7 @@ class HebrewG2PClassifier(nn.Module):
 
     def parameter_groups(self, encoder_lr: float, head_lr: float, weight_decay: float) -> list[dict]:
         """Discriminative LRs: lower for encoder, higher for classification heads."""
-        no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight"}
+        no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight", "norm.weight"}
 
         def is_no_decay(name: str) -> bool:
             return any(term in name for term in no_decay)

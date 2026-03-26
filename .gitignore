@@ -12,7 +12,8 @@ wheels/
 *.7z
 *.txt
 plans/overfit/dataset/
-dataset/
+dataset/*
+!dataset/.gitkeep
 dataset_finetune/
 checkpoint/
 checkpoints/
@@ -28,3 +29,4 @@ model-he/
 *.npy
 *.wav
 *.tar.gz
+backup_checkpoints/

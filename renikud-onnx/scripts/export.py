@@ -17,20 +17,20 @@ import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from constants import CONSONANTS, VOWELS, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
+from constants import CONSONANTS, VOWELS, TOKENIZER_PATH, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
 from infer import load_checkpoint
 from model import HebrewG2PClassifier
-from tokenization import load_encoder_tokenizer
+from tokenization import load_tokenizer
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", default="model.onnx")
-    parser.add_argument("--int8", action="store_true", help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
+    parser.add_argument("--int8", action=argparse.BooleanOptionalAction, default=True, help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
     args = parser.parse_args()
 
-    tokenizer = load_encoder_tokenizer()
+    tokenizer = load_tokenizer(TOKENIZER_PATH)
     vocab = tokenizer.get_vocab()  # {token: id}
     tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
 
@@ -63,7 +63,7 @@ def main():
             "vowel_logits": {0: "batch", 1: "seq_len"},
             "stress_logits": {0: "batch", 1: "seq_len"},
         },
-        opset_version=17,
+        opset_version=18,
     )
 
     if args.int8:
@@ -97,6 +97,10 @@ def main():
     entry = meta.add()
     entry.key = "sep_token_id"
     entry.value = str(tokenizer.sep_token_id)
+
+    entry = meta.add()
+    entry.key = "letter_consonant_mask"
+    entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
 
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
 
