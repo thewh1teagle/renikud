@@ -36,10 +36,10 @@ class HebrewG2PClassifier(nn.Module):
 
         self.dropout = nn.Dropout(dropout_rate)
 
-        # Three independent classification heads
+        # Coupled classification heads: each head sees encoder state + previous head logits
         self.consonant_head = nn.Linear(hidden_size, NUM_CONSONANT_CLASSES)
-        self.vowel_head = nn.Linear(hidden_size, NUM_VOWEL_CLASSES)
-        self.stress_head = nn.Linear(hidden_size, NUM_STRESS_CLASSES)
+        self.vowel_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES, NUM_VOWEL_CLASSES)
+        self.stress_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES + NUM_VOWEL_CLASSES, NUM_STRESS_CLASSES)
 
         # Precompute consonant mask: [vocab_size, NUM_CONSONANT_CLASSES]
         # mask[i, j] = True means consonant class j is FORBIDDEN for Hebrew letter i
@@ -110,10 +110,12 @@ class HebrewG2PClassifier(nn.Module):
         hidden = self.dropout(encoder_outputs.last_hidden_state)  # [B, S, H]
 
         consonant_logits = self.consonant_head(hidden)  # [B, S, NUM_CONSONANT_CLASSES]
-        vowel_logits = self.vowel_head(hidden)           # [B, S, NUM_VOWEL_CLASSES]
-        stress_logits = self.stress_head(hidden)         # [B, S, NUM_STRESS_CLASSES]
 
-        # Apply per-letter consonant mask if vocab provided
+        # Couple heads using raw (unmasked) consonant logits — consistent between train and inference
+        vowel_logits = self.vowel_head(torch.cat([hidden, consonant_logits], dim=-1))                          # [B, S, NUM_VOWEL_CLASSES]
+        stress_logits = self.stress_head(torch.cat([hidden, consonant_logits, vowel_logits], dim=-1))          # [B, S, NUM_STRESS_CLASSES]
+
+        # Apply consonant mask only to the output (inference constraint, not used during training)
         if tokenizer_vocab is not None:
             consonant_logits = self._apply_consonant_mask(consonant_logits, input_ids, tokenizer_vocab)
 
