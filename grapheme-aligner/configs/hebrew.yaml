@@ -1,0 +1,68 @@
+max_tokens_per_letter: 3
+
+# IPA atoms — digraphs must be listed before their components
+ipa_atoms:
+  - ts
+  - dʒ
+  - tʃ
+  - dz
+  - p
+  - b
+  - t
+  - d
+  - k
+  - ɡ
+  - f
+  - v
+  - s
+  - z
+  - ʃ
+  - ʒ
+  - χ
+  - ʁ
+  - h
+  - ʔ
+  - m
+  - n
+  - l
+  - j
+  - w
+  - r
+  - a
+  - e
+  - i
+  - o
+  - u
+  - ˈ
+
+# Per-letter constraints: allowed = list of IPA atoms that can START a chunk for this letter.
+# "" means the letter can be silent (emit nothing).
+# EM learns probabilities within these constraints.
+letters:
+  א: [ʔ, ""]
+  ב: [b, v]
+  ג: [ɡ, dʒ]
+  ד: [d]
+  ה: [h, ""]
+  ו: [v, w, ""]
+  ז: [z, ʒ]
+  ח: [χ]
+  ט: [t]
+  י: [j, ""]
+  כ: [k, χ]
+  ך: [k, χ]
+  ל: [l]
+  מ: [m]
+  ם: [m]
+  נ: [n]
+  ן: [n]
+  ס: [s]
+  ע: [ʔ, ""]
+  פ: [p, f]
+  ף: [p, f]
+  צ: [ts, tʃ]
+  ץ: [ts, tʃ]
+  ק: [k]
+  ר: [ʁ]
+  ש: [ʃ, s]
+  ת: [t]
