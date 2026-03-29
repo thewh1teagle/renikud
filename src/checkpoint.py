@@ -1,18 +1,10 @@
-"""Checkpoint saving and LR schedule for classifier training."""
+"""Checkpoint saving for classifier training."""
 
 from __future__ import annotations
 
 import json
-import math
 import shutil
 from pathlib import Path
-
-
-def cosine_lr_lambda(step: int, warmup_steps: int, total_steps: int) -> float:
-    if step < warmup_steps:
-        return step / max(1, warmup_steps)
-    progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
-    return 0.5 * (1.0 + math.cos(math.pi * progress))
 
 
 def save_checkpoint(model, output_dir: Path, step: int, acc: float, save_total_limit: int):

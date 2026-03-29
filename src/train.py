@@ -23,12 +23,12 @@ import wandb
 from accelerate import Accelerator
 from tqdm import tqdm
 
-from checkpoint import cosine_lr_lambda, save_checkpoint
+from checkpoint import save_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
 from model import G2PModel
-from optimizer import parameter_groups
+from optimizer import cosine_lr_lambda, parameter_groups
 
 
 def main():
