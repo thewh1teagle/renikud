@@ -24,6 +24,17 @@ from constants import CONSONANT_TO_ID, ALEF_ORD, TAF_ORD, NUM_CONSONANT_CLASSES,
 # Letter → allowed consonant symbols
 # "" = silent (∅)
 # ---------------------------------------------------------------------------
+# Letter whose word-final + vowel-a chunk reverses to [vowel]χ (furtive patah)
+FURTIVE_PATAH_LETTER: str = "ח"
+FURTIVE_PATAH_IPA: str = "aχ"  # the reversed IPA output: vowel precedes consonant
+
+# Letters where a following apostrophe is a digraph marker, not punctuation
+LETTERS_WITH_GERESH: frozenset[str] = frozenset("גזצץ")
+
+# ---------------------------------------------------------------------------
+# Letter → allowed consonant symbols
+# "" = silent (∅)
+# ---------------------------------------------------------------------------
 HEBREW_LETTER_CONSONANTS: dict[str, tuple[str, ...]] = {
     "א": ("ʔ", ""),
     "ב": ("b", "v"),

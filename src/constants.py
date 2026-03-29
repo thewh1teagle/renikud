@@ -37,6 +37,7 @@ NUM_CONSONANT_CLASSES: Final[int] = len(CONSONANTS)
 NUM_STRESS_CLASSES: Final[int] = 2
 STRESS_NONE: Final[int] = 0
 STRESS_YES: Final[int] = 1
+STRESS_MARK: Final[str] = "ˈ"
 
 # Hebrew Unicode range א-ת
 ALEF_ORD: Final[int] = ord("א")

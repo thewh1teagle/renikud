@@ -10,10 +10,13 @@ from constants import (
     ID_TO_CONSONANT,
     ID_TO_VOWEL,
     CONSONANT_TO_ID,
+    CONSONANT_NONE,
+    VOWEL_NONE,
     STRESS_YES,
+    STRESS_MARK,
     is_hebrew_letter,
 )
-from phonology import HEBREW_LETTER_CONSONANT_IDS
+from phonology import HEBREW_LETTER_CONSONANT_IDS, FURTIVE_PATAH_LETTER, FURTIVE_PATAH_IPA, LETTERS_WITH_GERESH
 
 
 def build_tokenizer_vocab(tokenizer) -> dict[int, str]:
@@ -75,18 +78,18 @@ def decode(
 
         if not is_hebrew_letter(char):
             # Skip geresh apostrophe after letters that use it as a digraph marker
-            if char == "'" and start > 0 and text[start - 1] in "גזצץ":
+            if char == "'" and start > 0 and text[start - 1] in LETTERS_WITH_GERESH:
                 pass
             else:
                 result.append(char)
             continue
 
-        consonant = ID_TO_CONSONANT.get(int(consonant_preds[tok_idx]), "∅")
-        vowel = ID_TO_VOWEL.get(int(vowel_preds[tok_idx]), "∅")
+        consonant = ID_TO_CONSONANT.get(int(consonant_preds[tok_idx]), CONSONANT_NONE)
+        vowel = ID_TO_VOWEL.get(int(vowel_preds[tok_idx]), VOWEL_NONE)
         stress = tok_idx in stressed_positions
 
         # Apply per-letter consonant constraint at inference
-        allowed = HEBREW_LETTER_CONSONANT_IDS.get(char, (CONSONANT_TO_ID["∅"],))
+        allowed = HEBREW_LETTER_CONSONANT_IDS.get(char, (CONSONANT_TO_ID[CONSONANT_NONE],))
         if CONSONANT_TO_ID.get(consonant, 0) not in allowed:
             for cid in sorted(allowed, key=lambda x: -consonant_logits[tok_idx, x].item()):
                 consonant = ID_TO_CONSONANT[cid]
@@ -96,16 +99,16 @@ def decode(
         # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
         word_final = end >= len(text) or text[end] == " "
         chunk = ""
-        if char == "ח" and word_final and vowel == "a":
+        if char == FURTIVE_PATAH_LETTER and word_final and vowel == "a":
             if stress:
-                chunk += "ˈ"
-            chunk += "aχ"
+                chunk += STRESS_MARK
+            chunk += FURTIVE_PATAH_IPA
         else:
-            if consonant != "∅":
+            if consonant != CONSONANT_NONE:
                 chunk += consonant
             if stress:
-                chunk += "ˈ"
-            if vowel != "∅":
+                chunk += STRESS_MARK
+            if vowel != VOWEL_NONE:
                 chunk += vowel
 
         result.append(chunk)
