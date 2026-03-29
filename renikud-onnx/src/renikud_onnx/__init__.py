@@ -109,13 +109,21 @@ class G2P:
             vowel = self._vowel_vocab.get(int(vowel_preds[tok_idx]), "∅")
             stress = tok_idx in stressed_positions
 
+            # Assemble IPA chunk: [consonant][ˈ][vowel]
+            # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
+            word_final = end >= len(normalized) or normalized[end] == " "
             chunk = ""
-            if consonant != "∅":
-                chunk += consonant
-            if stress:
-                chunk += STRESS_MARK
-            if vowel != "∅":
-                chunk += vowel
+            if char == "ח" and word_final and vowel == "a":
+                if stress:
+                    chunk += STRESS_MARK
+                chunk += "aχ"
+            else:
+                if consonant != "∅":
+                    chunk += consonant
+                if stress:
+                    chunk += STRESS_MARK
+                if vowel != "∅":
+                    chunk += vowel
             result.append(chunk)
 
         if prev_end < len(normalized):
