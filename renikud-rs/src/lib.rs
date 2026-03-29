@@ -199,14 +199,24 @@ impl G2P {
             let consonant = self.consonant_vocab.get(&consonant_id).map(String::as_str).unwrap_or("∅");
             let vowel = self.vowel_vocab.get(&vowel_id).map(String::as_str).unwrap_or("∅");
 
-            if consonant != "∅" {
-                result.push_str(consonant);
-            }
-            if stressed {
-                result.push_str(STRESS);
-            }
-            if vowel != "∅" {
-                result.push_str(vowel);
+            // Assemble IPA chunk: [consonant][ˈ][vowel]
+            // Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
+            let word_final = end >= normalized.len() || normalized[end..].starts_with(' ');
+            if c == 'ח' && word_final && vowel == "a" {
+                if stressed {
+                    result.push_str(STRESS);
+                }
+                result.push_str("aχ");
+            } else {
+                if consonant != "∅" {
+                    result.push_str(consonant);
+                }
+                if stressed {
+                    result.push_str(STRESS);
+                }
+                if vowel != "∅" {
+                    result.push_str(vowel);
+                }
             }
         }
 
