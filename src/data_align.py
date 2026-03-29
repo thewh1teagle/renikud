@@ -19,40 +19,7 @@ import multiprocessing as mp
 import regex as re
 from tqdm import tqdm
 
-
-# ---------------------------------------------------------------------------
-# Hebrew letter -> allowed leading consonants (the IPA token that starts its chunk)
-# ∅ means the letter can be silent (emit nothing)
-# ---------------------------------------------------------------------------
-HEBREW_CONSONANTS: dict[str, tuple[str, ...]] = {
-    "א": ("ʔ", ""),
-    "ב": ("b", "v"),
-    "ג": ("ɡ", "dʒ"),
-    "ד": ("d",),
-    "ה": ("h", ""),
-    "ו": ("v", "w", ""),      # can also be the vowel u/o — handled via vowel-only path
-    "ז": ("z", "ʒ"),
-    "ח": ("χ",),
-    "ט": ("t",),
-    "י": ("j", ""),            # can also be the vowel i — handled via vowel-only path
-    "כ": ("k", "χ"),
-    "ך": ("k", "χ"),
-    "ל": ("l",),
-    "מ": ("m",),
-    "ם": ("m",),
-    "נ": ("n",),
-    "ן": ("n",),
-    "ס": ("s",),
-    "ע": ("ʔ", ""),
-    "פ": ("p", "f"),
-    "ף": ("p", "f"),
-    "צ": ("ts", "tʃ"),
-    "ץ": ("ts", "tʃ"),
-    "ק": ("k",),
-    "ר": ("ʁ",),
-    "ש": ("ʃ", "s"),
-    "ת": ("t",),
-}
+from phonology import HEBREW_LETTER_CONSONANTS as HEBREW_CONSONANTS
 
 VOWELS = ("a", "e", "i", "o", "u")
 STRESS = "ˈ"
@@ -119,22 +86,24 @@ def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
                             dp[i][j_new] = True
                             back[i][j_new] = j_prev
 
-            # Special case: word-final ח consumes [stress?]aχ.
-            # The preceding vowel (o/u/e) is handled by the ו/י special case above.
-            # For words without a preceding vowel letter (e.g. שמח -> samˈeaχ),
-            # also allow consuming [vowel]aχ as a fallback.
+            # Special case: word-final ח — furtive patah.
+            # IPA encodes it as [stress?][vowel]χ (vowel before consonant).
+            # We consume this reversed chunk and store it as (χ, vowel) like any other letter.
             # Only applies when ח is the last letter of the word (i == n).
             if char == "ח" and i == n:
-                for prefix in ("aχ", "ˈaχ"):
-                    if rest.startswith(prefix):
-                        j_new = j_prev + len(prefix)
-                        if j_new <= m:
-                            dp[i][j_new] = True
-                            back[i][j_new] = j_prev
-                for vowel in VOWELS:
-                    for prefix in (f"{vowel}aχ", f"ˈ{vowel}aχ"):
-                        if rest.startswith(prefix):
-                            j_new = j_prev + len(prefix)
+                for vowel in VOWELS + ("",):
+                    for has_stress in (True, False):
+                        pos = 0
+                        if has_stress:
+                            if not rest.startswith(STRESS):
+                                continue
+                            pos = 1
+                        if vowel:
+                            if not rest[pos:].startswith(vowel):
+                                continue
+                            pos += len(vowel)
+                        if rest[pos:].startswith("χ"):
+                            j_new = j_prev + pos + 1  # +1 for χ
                             if j_new <= m and not dp[i][j_new]:
                                 dp[i][j_new] = True
                                 back[i][j_new] = j_prev
@@ -188,7 +157,7 @@ def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
         # Keep only Hebrew letters for alignment
         heb_core = re.sub(r"[^\u05d0-\u05ea]", "", hw)
         # Keep only IPA phoneme characters (strip punctuation like . , ? !)
-        ipa_core = re.sub(r"[^\w\u02c8\u0294\u0261\u0281\u0283\u0292χʁʃʒʔɡˈaeiou]", "", iw)
+        ipa_core = re.sub(r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]", "", iw)
 
         if not heb_core:
             continue

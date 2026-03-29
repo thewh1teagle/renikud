@@ -8,18 +8,16 @@ Usage:
 
 import argparse
 import json
-import sys
 import tempfile
 from pathlib import Path
 
 import onnx
 import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from constants import CONSONANTS, VOWELS, TOKENIZER_PATH, HEBREW_LETTER_TO_ALLOWED_CONSONANTS
+from constants import CONSONANTS, VOWELS, TOKENIZER_PATH
 from infer import load_checkpoint
-from model import HebrewG2PClassifier
+from model import G2PModel
+from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS
 from tokenization import load_tokenizer
 
 
@@ -34,7 +32,7 @@ def main():
     vocab = tokenizer.get_vocab()  # {token: id}
     tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
 
-    model = HebrewG2PClassifier()
+    model = G2PModel()
     load_checkpoint(model, args.checkpoint)
     if args.int8:
         model.float().eval()

@@ -10,15 +10,12 @@ Usage:
 
 import argparse
 import csv
-import sys
 from pathlib import Path
 
 import torch
 import jiwer
 from tqdm import tqdm
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from model import HebrewG2PClassifier
+from model import G2PModel
 from infer import load_checkpoint, phonemize
 from tokenization import load_tokenizer
 from constants import MAX_LEN
@@ -49,7 +46,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = load_tokenizer(Path(__file__).parent.parent / "src" / "tokenizer.json")
-    model = HebrewG2PClassifier()
+    model = G2PModel()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
 

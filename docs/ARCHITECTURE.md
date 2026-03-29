@@ -17,11 +17,11 @@ This works because Hebrew has a nearly one-to-one letter→phoneme structure: ea
 1. **Encoder** — ModernBERT-base (22-layer, 768-dim, RoPE, Flash Attention), initialized from scratch with a custom 104-token Hebrew character vocabulary. Defined in `src/encoder.py`.
 2. **Three classification heads** — independent linear projections on top of each token's hidden state:
    - **Consonant head** → 26 classes (`∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`)
-   - **Vowel head** → 8 classes (`∅ a e i o u aχ`)
+   - **Vowel head** → 7 classes (`∅ a e i o u`)
    - **Stress head** → 2 classes (none / stressed)
-3. **Consonant masking** — before argmax, logits for phonetically impossible consonants are zeroed out (`-1e9`) using a precomputed per-letter mask from `HEBREW_LETTER_TO_ALLOWED_CONSONANTS`. For example, ל can only ever produce `l` or `∅`, never `b`.
+3. **Consonant masking** — before argmax, logits for phonetically impossible consonants are zeroed out (`-1e9`) using a precomputed per-letter mask from `phonology.py`. For example, ל can only ever produce `l` or `∅`, never `b`.
 
-At inference (`src/infer.py`), the consonant mask is applied before argmax so the model can never predict a phonetically impossible consonant for a given letter — e.g. ק always decodes to `k`, never `v`. Each Hebrew letter position then assembles its output as `[consonant][ˈ?][vowel?]`.
+At inference (`src/infer.py`), the consonant mask is applied before argmax so the model can never predict a phonetically impossible consonant for a given letter — e.g. ק always decodes to `k`, never `v`. Each Hebrew letter position assembles its output as `[consonant][ˈ?][vowel?]`, with one exception: word-final ח with vowel `a` emits `[ˈ?]aχ` (furtive patah — the vowel precedes the consonant in IPA).
 
 ## Tokenizer
 
@@ -36,8 +36,7 @@ Each character is its own token. The tokenizer is built deterministically from c
 
 **Consonants** (25 + ∅): `∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`
 
-**Vowels** (6 + ∅ + aχ): `∅ a e i o u aχ`
-- `aχ` handles word-final ח coda (e.g. `שמח` → `samˈeaχ`)
+**Vowels** (6 + ∅): `∅ a e i o u`
 
 **Stress**: binary — 0 (none) or 1 (ˈ precedes vowel)
 

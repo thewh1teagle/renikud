@@ -8,14 +8,13 @@ from constants import (
     NUM_CONSONANT_CLASSES,
     NUM_VOWEL_CLASSES,
     NUM_STRESS_CLASSES,
-    HEBREW_LETTER_TO_ALLOWED_CONSONANTS,
     IGNORE_INDEX,
-    is_hebrew_letter,
 )
 from encoder import build_encoder
+from phonology import build_consonant_mask, apply_consonant_mask
 
 
-class HebrewG2PClassifier(nn.Module):
+class G2PModel(nn.Module):
     """
     Per-character Hebrew G2P model.
 
@@ -28,10 +27,10 @@ class HebrewG2PClassifier(nn.Module):
     through unchanged at inference — the heads are never called for them.
     """
 
-    def __init__(self, dropout_rate: float = 0.1) -> None:
+    def __init__(self, dropout_rate: float = 0.1, flash_attention: bool = False) -> None:
         super().__init__()
 
-        self.encoder = build_encoder()
+        self.encoder = build_encoder(flash_attention=flash_attention)
         hidden_size = self.encoder.config.hidden_size
 
         self.dropout = nn.Dropout(dropout_rate)
@@ -41,57 +40,7 @@ class HebrewG2PClassifier(nn.Module):
         self.vowel_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES, NUM_VOWEL_CLASSES)
         self.stress_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES + NUM_VOWEL_CLASSES, NUM_STRESS_CLASSES)
 
-        # Precompute consonant mask: [vocab_size, NUM_CONSONANT_CLASSES]
-        # mask[i, j] = True means consonant class j is FORBIDDEN for Hebrew letter i
-        # Built once at init, moved to device on first forward pass
-        self._consonant_mask: torch.Tensor | None = None
-        self._build_consonant_mask()
-
-    def _build_consonant_mask(self) -> None:
-        """
-        Build a boolean mask [num_hebrew_letters, NUM_CONSONANT_CLASSES].
-        True = this consonant class is forbidden for this letter.
-        Hebrew letters are indexed by (ord(char) - ord('א')).
-        """
-        from constants import ALEF_ORD, TAF_ORD
-        n_letters = TAF_ORD - ALEF_ORD + 1
-        # Start with all forbidden, then allow the valid ones
-        mask = torch.ones(n_letters, NUM_CONSONANT_CLASSES, dtype=torch.bool)
-        for char, allowed_ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items():
-            idx = ord(char) - ALEF_ORD
-            for cid in allowed_ids:
-                mask[idx, cid] = False
-        self._consonant_mask = mask
-
-    def _apply_consonant_mask(
-        self,
-        consonant_logits: torch.Tensor,
-        input_ids: torch.Tensor,
-        tokenizer_vocab: dict[int, str],
-    ) -> torch.Tensor:
-        """
-        Zero out forbidden consonant classes for each position based on the
-        input Hebrew character at that position.
-
-        consonant_logits: [B, S, NUM_CONSONANT_CLASSES]
-        input_ids:        [B, S]
-        tokenizer_vocab:  maps token_id -> character string
-        """
-        from constants import ALEF_ORD
-        mask = self._consonant_mask.to(consonant_logits.device)
-        B, S, _ = consonant_logits.shape
-        masked = consonant_logits.clone()
-
-        for b in range(B):
-            for s in range(S):
-                token_id = input_ids[b, s].item()
-                char = tokenizer_vocab.get(token_id, "")
-                if len(char) == 1 and is_hebrew_letter(char):
-                    letter_idx = ord(char) - ALEF_ORD
-                    # Set forbidden logits to -inf
-                    masked[b, s][mask[letter_idx]] = -1e9
-
-        return masked
+        self._consonant_mask: torch.Tensor = build_consonant_mask()
 
     def forward(
         self,
@@ -117,7 +66,7 @@ class HebrewG2PClassifier(nn.Module):
 
         # Apply consonant mask only to the output (inference constraint, not used during training)
         if tokenizer_vocab is not None:
-            consonant_logits = self._apply_consonant_mask(consonant_logits, input_ids, tokenizer_vocab)
+            consonant_logits = apply_consonant_mask(consonant_logits, input_ids, tokenizer_vocab, self._consonant_mask)
 
         output: dict[str, torch.Tensor] = {
             "consonant_logits": consonant_logits,
@@ -136,38 +85,3 @@ class HebrewG2PClassifier(nn.Module):
 
         return output
 
-    def parameter_groups(self, encoder_lr: float, head_lr: float, weight_decay: float) -> list[dict]:
-        """Discriminative LRs: lower for encoder, higher for classification heads."""
-        no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight", "norm.weight"}
-
-        def is_no_decay(name: str) -> bool:
-            return any(term in name for term in no_decay)
-
-        return [
-            {
-                "params": [p for n, p in self.encoder.named_parameters() if not is_no_decay(n)],
-                "lr": encoder_lr,
-                "weight_decay": weight_decay,
-            },
-            {
-                "params": [p for n, p in self.encoder.named_parameters() if is_no_decay(n)],
-                "lr": encoder_lr,
-                "weight_decay": 0.0,
-            },
-            {
-                "params": [
-                    p for n, p in self.named_parameters()
-                    if not n.startswith("encoder.") and not is_no_decay(n)
-                ],
-                "lr": head_lr,
-                "weight_decay": weight_decay,
-            },
-            {
-                "params": [
-                    p for n, p in self.named_parameters()
-                    if not n.startswith("encoder.") and is_no_decay(n)
-                ],
-                "lr": head_lr,
-                "weight_decay": 0.0,
-            },
-        ]

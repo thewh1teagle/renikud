@@ -98,14 +98,11 @@ def parse_ipa_chunk(chunk: str) -> tuple[str, str, int]:
     if not vowel:
         vowel = "∅"
 
-    # Special case: [vowel]aχ pattern (word-final ח) e.g. "uaχ", "oaχ", "eaχ"
-    # The aligner assigns the whole diphthong to ח — aχ encodes the full coda, consonant is ∅
-    if vowel not in VOWEL_TO_ID and vowel.endswith("aχ"):
-        consonant = "∅"
-        vowel = "aχ"
-    # Plain "aχ" chunk (ח -> "aχ"): consonant is already embedded in vowel token
-    if vowel == "aχ":
-        consonant = "∅"
+    # Furtive patah: word-final ח is encoded as [vowel]χ (reversed order).
+    # Detect this by checking if the "vowel" ends with χ — extract the real vowel.
+    if vowel.endswith("χ"):
+        consonant = "χ"
+        vowel = vowel[:-1] or "∅"
 
     # Validate — fall back to ∅ if unknown
     if consonant not in CONSONANT_TO_ID:

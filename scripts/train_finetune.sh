@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CHECKPOINT=${1:?"Usage: $0 <checkpoint-dir>"}
+CHECKPOINT=${1:?"Usage: $0 <checkpoint-dir> [extra args]"}
 
 uv run accelerate launch src/train.py \
   --train-dataset dataset/.cache/train \
@@ -11,4 +11,5 @@ uv run accelerate launch src/train.py \
   --init-weights-only \
   --encoder-lr 2e-6 \
   --head-lr 1e-5 \
-  --warmup-steps 200
+  --warmup-steps 200 \
+  "${@:2}"

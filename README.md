@@ -12,23 +12,9 @@ Each Hebrew letter gets exactly one output slot predicting a (consonant, vowel, 
 
 See `docs/ARCHITECTURE.md` for full design details.
 
-## Data Preparation
-
-```console
-./scripts/train_prepare.sh dataset/data.tsv
-```
-
 ## Training
 
-```console
-./scripts/train_scratch.sh
-```
-
-For fine-tuning from a checkpoint:
-
-```console
-./scripts/train_finetune.sh outputs/g2p-classifier/checkpoint-5000
-```
+See `docs/TRAINING.md` for data preparation, training commands, upload/download, and hyperparameters.
 
 ## Benchmark
 
@@ -55,22 +41,3 @@ print(g2p.phonemize("שלום עולם"))
 ```
 
 Or the Rust crate — see `renikud-rs/`.
-
-## Upload Checkpoint to HuggingFace
-
-```console
-./scripts/upload_checkpoint.sh outputs/g2p-classifier/checkpoint-5000
-```
-
-## Download Checkpoint
-
-```console
-./scripts/download_checkpoint.sh                  # downloads to ./checkpoint
-```
-
-To fine-tune from a downloaded checkpoint:
-
-```console
-./scripts/download_checkpoint.sh checkpoint
-./scripts/train_finetune.sh checkpoint
-```

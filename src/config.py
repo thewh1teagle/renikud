@@ -33,4 +33,5 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=torch.cuda.is_available(),
     )
+    parser.add_argument("--flash-attention", action="store_true", default=False)
     return parser.parse_args()

@@ -30,6 +30,17 @@ torch = [
   { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
+# Makes src/ importable without sys.path hacks — uv run scripts/* just works
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.uv.workspace]
 members = [
     "renikud-onnx",

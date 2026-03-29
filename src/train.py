@@ -27,7 +27,8 @@ from checkpoint import cosine_lr_lambda, save_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
-from model import HebrewG2PClassifier
+from model import G2PModel
+from optimizer import parameter_groups
 
 
 def main():
@@ -43,7 +44,7 @@ def main():
 
     train_loader, eval_loader = make_dataloaders(args)
 
-    model = HebrewG2PClassifier()
+    model = G2PModel(flash_attention=args.flash_attention)
 
     if args.init_from_checkpoint:
         from safetensors.torch import load_file
@@ -59,7 +60,7 @@ def main():
             print("Encoder frozen.")
 
     optimizer = torch.optim.AdamW(
-        model.parameter_groups(args.encoder_lr, args.head_lr, args.weight_decay)
+        parameter_groups(model, args.encoder_lr, args.head_lr, args.weight_decay)
     )
 
     total_opt_steps = math.ceil(len(train_loader) * args.epochs / args.gradient_accumulation_steps)

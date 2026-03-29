@@ -11,6 +11,7 @@ Vocab size matches the tokenizer built in tokenization.py.
 
 from __future__ import annotations
 
+import torch
 from transformers import ModernBertConfig, ModernBertModel
 
 from tokenization import build_vocab
@@ -36,5 +37,10 @@ MODERNBERT_CONFIG = ModernBertConfig(
 )
 
 
-def build_encoder() -> ModernBertModel:
-    return ModernBertModel(MODERNBERT_CONFIG)
+def build_encoder(flash_attention: bool = False) -> ModernBertModel:
+    config = MODERNBERT_CONFIG
+    if flash_attention:
+        config = ModernBertConfig(**MODERNBERT_CONFIG.to_dict())
+        config._attn_implementation = "flash_attention_2"
+        config.dtype = torch.bfloat16
+    return ModernBertModel(config)
