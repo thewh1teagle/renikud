@@ -1,18 +1,20 @@
-"""ModernBERT encoder for Hebrew G2P, initialized from scratch.
+"""NeoBERT encoder for Hebrew G2P, initialized from scratch.
 
-Architecture follows ModernBERT-base (answerdotai/ModernBERT-base):
+Architecture follows chandar-lab/NeoBERT shrunk to ~113M params:
+  - 16 layers, 768 hidden, 12 heads, 3072 FFN
+  - SwiGLU activation
   - RoPE positional embeddings
-  - Pre-LN with RMSNorm
-  - Flash Attention
-  - 8192 token context
+  - Pre-RMSNorm
+  - Full attention every layer (xformers)
+  - 4096 token context
 
 Vocab size matches the tokenizer built in tokenization.py.
+Set NEOBERT_ONNX_EXPORT=1 before importing to use ONNX-compatible ops.
 """
 
 from __future__ import annotations
 
-import torch
-from transformers import ModernBertConfig, ModernBertModel
+from neobert.model import NeoBERT, NeoBERTConfig
 
 from tokenization import build_vocab
 
@@ -21,26 +23,13 @@ def _vocab_size() -> int:
     return len(build_vocab())
 
 
-MODERNBERT_CONFIG = ModernBertConfig(
-    vocab_size=_vocab_size(),
-    hidden_size=768,
-    num_hidden_layers=22,
-    num_attention_heads=12,
-    intermediate_size=1152,
-    hidden_activation="gelu",
-    mlp_dropout=0.0,
-    attention_dropout=0.0,
-    max_position_embeddings=8192,
-    initializer_range=0.02,
-    norm_eps=1e-5,
-    pad_token_id=0,
-)
-
-
-def build_encoder(flash_attention: bool = False) -> ModernBertModel:
-    config = MODERNBERT_CONFIG
-    if flash_attention:
-        config = ModernBertConfig(**MODERNBERT_CONFIG.to_dict())
-        config._attn_implementation = "flash_attention_2"
-        config.dtype = torch.bfloat16
-    return ModernBertModel(config)
+def build_encoder(flash_attention: bool = False) -> NeoBERT:
+    config = NeoBERTConfig(
+        vocab_size=_vocab_size(),      # 104 instead of 30522 (character-level Hebrew vocab)
+        num_hidden_layers=6,           # 28 in full NeoBERT; 6 gives ~19M with our tiny vocab
+        hidden_size=512,               # reduced from 768
+        intermediate_size=2048,        # 4x hidden
+        num_attention_heads=8,         # reduced from 12
+        max_length=4096,
+    )
+    return NeoBERT(config)

@@ -1,5 +1,5 @@
 [project]
-name = "renikud-v4"
+name = "renikud"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -16,6 +16,16 @@ dependencies = [
     "huggingface-hub>=1.5.0",
     "wandb>=0.25.0",
     "accelerate>=1.12.0",
+    "xformers>=0.0.35",
+]
+
+[project.optional-dependencies]
+cu130 = ["torch>=2.10.0"]
+cu128 = ["torch>=2.10.0"]
+
+[tool.uv]
+conflicts = [
+  [{ extra = "cu130" }, { extra = "cu128" }],
 ]
 
 # CUDA Config
@@ -25,9 +35,15 @@ name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu130", extra = "cu130" },
+  { index = "pytorch-cu128", extra = "cu128" },
 ]
 
 # Makes src/ importable without sys.path hacks — uv run scripts/* just works
