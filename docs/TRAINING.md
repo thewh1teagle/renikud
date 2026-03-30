@@ -39,6 +39,16 @@ To fine-tune from a downloaded checkpoint:
 ./scripts/train_finetune.sh checkpoint
 ```
 
+## xFormers
+
+xFormers must match your PyTorch CUDA version. If you see a version mismatch warning (e.g. built for cu128 but you have cu130), build from source:
+
+```console
+pip install xformers --no-binary xformers
+```
+
+Note: `pyproject.toml` pins PyTorch to the `pytorch-cu130` index. If your system uses a different CUDA version, remove or update that index entry before installing.
+
 ## Flash Attention
 
 ModernBERT supports Flash Attention 2 for faster training and lower VRAM usage. Enable with `--flash-attention`:
