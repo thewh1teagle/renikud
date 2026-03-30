@@ -39,6 +39,15 @@ To fine-tune from a downloaded checkpoint:
 ./scripts/train_finetune.sh checkpoint
 ```
 
+## CUDA Version
+
+Install PyTorch for your CUDA version using extras:
+
+```console
+uv sync --extra cu130  # CUDA 13.0
+uv sync --extra cu128  # CUDA 12.8
+```
+
 ## xFormers
 
 xFormers must match your PyTorch CUDA version. If you see a version mismatch warning (e.g. built for cu128 but you have cu130), build from source:
