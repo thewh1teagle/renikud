@@ -26,10 +26,10 @@ def _vocab_size() -> int:
 def build_encoder(flash_attention: bool = False) -> NeoBERT:
     config = NeoBERTConfig(
         vocab_size=_vocab_size(),      # 104 instead of 30522 (character-level Hebrew vocab)
-        num_hidden_layers=16,          # 28 in full NeoBERT; 16 gives ~113M with our tiny vocab
-        hidden_size=768,               # unchanged from NeoBERT
-        intermediate_size=3072,        # unchanged from NeoBERT (4x hidden)
-        num_attention_heads=12,        # unchanged from NeoBERT
+        num_hidden_layers=6,           # 28 in full NeoBERT; 6 gives ~19M with our tiny vocab
+        hidden_size=512,               # reduced from 768
+        intermediate_size=2048,        # 4x hidden
+        num_attention_heads=8,         # reduced from 12
         max_length=4096,
     )
     return NeoBERT(config)
