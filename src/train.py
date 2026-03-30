@@ -27,6 +27,7 @@ from checkpoint import save_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
+from lang_pack import get_lang_pack
 from model import G2PModel
 from optimizer import cosine_lr_lambda, parameter_groups
 
@@ -44,7 +45,8 @@ def main():
 
     train_loader, eval_loader = make_dataloaders(args)
 
-    model = G2PModel(flash_attention=args.flash_attention)
+    lang_pack = get_lang_pack(args.lang)
+    model = G2PModel(lang_pack=lang_pack, flash_attention=args.flash_attention)
 
     if args.init_from_checkpoint:
         from safetensors.torch import load_file
@@ -106,7 +108,12 @@ def main():
                     print(f"\n[step {opt_step}] Encoder unfrozen.")
 
             with accelerator.autocast():
-                out = model(**batch)
+                out = model(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    active_mask=batch["active_mask"],
+                    target_ids=batch["target_ids"],
+                )
 
             scaled_loss = out["loss"] / args.gradient_accumulation_steps
             accelerator.backward(scaled_loss)
@@ -142,14 +149,14 @@ def main():
                     if opt_step % args.save_steps == 0:
                         metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16)
                         wandb.log(metrics, step=opt_step)
-                        print(f"[step {opt_step}] consonant_acc={metrics['consonant_acc']:.4f} vowel_acc={metrics['vowel_acc']:.4f} stress_acc={metrics['stress_acc']:.4f} eval_loss={metrics['eval_loss']:.4f}")
-                        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+                        print(f"[step {opt_step}] eval_loss={metrics['eval_loss']:.4f}")
+                        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, -metrics["eval_loss"], args.save_total_limit)
 
     if accelerator.is_main_process:
         metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16)
         wandb.log(metrics)
-        print(f"Final: consonant_acc={metrics['consonant_acc']:.4f} vowel_acc={metrics['vowel_acc']:.4f} stress_acc={metrics['stress_acc']:.4f}")
-        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+        print(f"Final: eval_loss={metrics['eval_loss']:.4f}")
+        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, -metrics["eval_loss"], args.save_total_limit)
         wandb.finish()
 
 

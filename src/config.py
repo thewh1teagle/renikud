@@ -35,4 +35,5 @@ def parse_args():
     )
     parser.add_argument("--flash-attention", action="store_true", default=False)
     parser.add_argument("--dataloader-workers", type=int, default=0)
+    parser.add_argument("--lang", type=str, default="hebrew")
     return parser.parse_args()

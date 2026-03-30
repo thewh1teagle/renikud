@@ -18,6 +18,7 @@ from tqdm import tqdm
 from model import G2PModel
 from infer import load_checkpoint, phonemize
 from tokenization import load_tokenizer
+from lang_pack import get_lang_pack
 from constants import MAX_LEN
 
 PUNCT = str.maketrans("", "", ".,?!")
@@ -35,18 +36,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--gt", type=str, default="gt.tsv")
+    parser.add_argument("--lang", type=str, default="hebrew")
     parser.add_argument("--ignore-punct", action="store_true")
     parser.add_argument("--save", type=str, default=None, help="Save report to file")
     args = parser.parse_args()
 
     if not Path(args.gt).exists():
-        print(f"Error: {args.gt} not found. Download with:")
-        print("wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv")
+        print(f"Error: {args.gt} not found.")
         return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    lang_pack = get_lang_pack(args.lang)
     tokenizer = load_tokenizer(Path(__file__).parent.parent / "src" / "tokenizer.json")
-    model = G2PModel()
+    model = G2PModel(lang_pack=lang_pack)
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
 
@@ -54,7 +56,7 @@ def main():
     refs, hyps, results = [], [], []
 
     for item in tqdm(gt_data, desc="Benchmarking"):
-        pred = phonemize(item["sentence"], model, tokenizer, device, MAX_LEN)
+        pred = phonemize(item["sentence"], model, tokenizer, lang_pack, device, MAX_LEN)
         ref = item["phonemes"]
         if args.ignore_punct:
             ref = ref.translate(PUNCT)
