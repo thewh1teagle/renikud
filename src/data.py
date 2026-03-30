@@ -45,11 +45,13 @@ def make_dataloaders(args) -> tuple[DataLoader, DataLoader]:
         batch_size=args.train_batch_size,
         shuffle=True,
         collate_fn=collator,
+        num_workers=args.dataloader_workers,
     )
     eval_loader = DataLoader(
         load_from_disk(args.eval_dataset),
         batch_size=args.eval_batch_size,
         shuffle=False,
         collate_fn=collator,
+        num_workers=args.dataloader_workers,
     )
     return train_loader, eval_loader
