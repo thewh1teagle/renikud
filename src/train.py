@@ -27,7 +27,7 @@ from checkpoint import save_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
-from lang_pack import get_lang_pack
+from languages import get_lang_pack
 from model import G2PModel
 from optimizer import cosine_lr_lambda, parameter_groups
 

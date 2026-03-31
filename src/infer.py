@@ -16,7 +16,8 @@ from pathlib import Path
 import torch
 
 from constants import MAX_LEN
-from lang_pack import get_lang_pack, LangPack
+from lang_pack import LangPack
+from languages import get_lang_pack
 from model import G2PModel, UPSAMPLE_FACTOR
 from tokenization import load_tokenizer
 

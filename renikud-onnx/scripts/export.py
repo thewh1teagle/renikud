@@ -21,7 +21,7 @@ import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 from infer import load_checkpoint
-from lang_pack import get_lang_pack
+from languages import get_lang_pack
 from model import G2PModel
 from tokenization import CLS_ID, SEP_ID
 

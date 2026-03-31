@@ -24,7 +24,8 @@ import datasets
 from tqdm import tqdm
 
 from constants import MAX_LEN
-from lang_pack import get_lang_pack, LangPack
+from lang_pack import LangPack
+from languages import get_lang_pack
 from tokenization import load_tokenizer
 
 def tokenize_ipa(ipa: str, token_to_id: dict[str, int], sorted_tokens: list[str]) -> list[int] | None:

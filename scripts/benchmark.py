@@ -18,7 +18,7 @@ from tqdm import tqdm
 from model import G2PModel
 from infer import load_checkpoint, phonemize
 from tokenization import load_tokenizer
-from lang_pack import get_lang_pack
+from languages import get_lang_pack
 from constants import MAX_LEN
 
 PUNCT = str.maketrans("", "", ".,?!")
