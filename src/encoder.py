@@ -16,16 +16,12 @@ from __future__ import annotations
 
 from neobert.model import NeoBERT, NeoBERTConfig
 
-from tokenization import build_vocab
-
-
-def _vocab_size() -> int:
-    return len(build_vocab())
+from tokenization import VOCAB_SIZE
 
 
 def build_encoder(flash_attention: bool = False) -> NeoBERT:
     config = NeoBERTConfig(
-        vocab_size=_vocab_size(),      # 104 instead of 30522 (character-level Hebrew vocab)
+        vocab_size=VOCAB_SIZE,         # codepoint-indexed: ord(char) = embedding index
         num_hidden_layers=6,           # ~10M param config
         hidden_size=368,
         intermediate_size=1472,        # 4x hidden

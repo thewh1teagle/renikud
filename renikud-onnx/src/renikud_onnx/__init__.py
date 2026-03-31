@@ -1,132 +1,100 @@
-"""renikud-onnx: Hebrew grapheme-to-phoneme inference via ONNX."""
+"""renikud-onnx: G2P inference via ONNX (structured upsample CTC model)."""
 
 from __future__ import annotations
 
 import json
-import re
 import unicodedata
 
 import numpy as np
 import onnxruntime as ort
 
-ALEF_ORD = ord("א")
-TAF_ORD = ord("ת")
-STRESS_MARK = "ˈ"
+UPSAMPLE_FACTOR = 3
 
 
-def _is_hebrew(char: str) -> bool:
-    return ALEF_ORD <= ord(char) <= TAF_ORD
+def _normalize(text: str, strip_accents: bool = True) -> str:
+    text = unicodedata.normalize("NFKC", text)
+    text = text.lower()
+    if strip_accents:
+        text = "".join(
+            c for c in unicodedata.normalize("NFD", text)
+            if unicodedata.category(c) != "Mn"
+        )
+    return text
 
 
 class G2P:
     def __init__(self, model_path: str) -> None:
         self._session = ort.InferenceSession(model_path)
         meta = self._session.get_modelmeta().custom_metadata_map
-        self._vocab: dict[str, int] = json.loads(meta["vocab"])
-        self._consonant_vocab: dict[int, str] = {int(k): v for k, v in json.loads(meta["consonant_vocab"]).items()}
-        self._vowel_vocab: dict[int, str] = {int(k): v for k, v in json.loads(meta["vowel_vocab"]).items()}
         self._cls_id = int(meta["cls_token_id"])
         self._sep_id = int(meta["sep_token_id"])
-        self._letter_constraints: dict[str, list[int]] = {
-            k: v for k, v in json.loads(meta["letter_consonant_constraints"]).items()
-        }
+        self._strip_accents: bool = meta.get("strip_accents", "true") == "true"
+        self._input_chars: frozenset[str] = frozenset(json.loads(meta["input_chars"]))
+        output_tokens: list[str] = json.loads(meta["output_tokens"])
+        # id_to_token: 1-indexed (0 = CTC blank)
+        self._id_to_token: dict[int, str] = {i: t for i, t in enumerate(output_tokens)}
 
-    def _tokenize(self, text: str) -> tuple[list[int], list[int], list[tuple[int, int]]]:
-        """Tokenize character by character, return ids, mask, and offset mapping."""
-        normalized = unicodedata.normalize("NFD", text)
-        unk_id = self._vocab.get("[UNK]", 0)
+    def _tokenize(self, norm: str) -> tuple[list[int], list[int], list[tuple[int, int]]]:
         ids = [self._cls_id]
-        offsets = [(0, 0)]  # CLS
-        for i, c in enumerate(normalized):
-            ids.append(self._vocab.get(c, unk_id))
+        offsets: list[tuple[int, int]] = [(0, 0)]  # CLS
+        for i, c in enumerate(norm):
+            ids.append(ord(c))
             offsets.append((i, i + 1))
         ids.append(self._sep_id)
         offsets.append((0, 0))  # SEP
         mask = [1] * len(ids)
         return ids, mask, offsets
 
-    def _best_stress_per_word(self, offsets: list[tuple[int, int]], text: str, stress_logits: np.ndarray) -> set[int]:
-        word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
-        words: dict[int, list[int]] = {i: [] for i in range(len(word_spans))}
-        for tok_idx, (start, end) in enumerate(offsets):
-            if end - start != 1:
-                continue
-            for word_idx, (ws, we) in enumerate(word_spans):
-                if ws <= start < we:
-                    words[word_idx].append(tok_idx)
-                    break
-        stressed: set[int] = set()
-        for toks in words.values():
-            if toks:
-                stressed.add(max(toks, key=lambda t: stress_logits[t, 1]))
-        return stressed
-
     def phonemize(self, text: str) -> str:
-        normalized = unicodedata.normalize("NFD", text)
-        ids, mask, offsets = self._tokenize(text)
+        norm = _normalize(text, strip_accents=self._strip_accents)
+        ids, mask, offsets = self._tokenize(norm)
 
-        consonant_logits, vowel_logits, stress_logits = self._session.run(
-            ["consonant_logits", "vowel_logits", "stress_logits"],
+        logits, = self._session.run(
+            ["logits"],
             {
                 "input_ids": np.array([ids], dtype=np.int64),
                 "attention_mask": np.array([mask], dtype=np.int64),
             },
         )
-        # logits shape: [1, seq_len, num_classes]
-        consonant_preds = consonant_logits[0].argmax(axis=-1)
-        vowel_preds = vowel_logits[0].argmax(axis=-1)
-        stressed_positions = self._best_stress_per_word(offsets, normalized, stress_logits[0])
+        # logits: [1, S*K, vocab_size]
+        preds = logits[0].argmax(axis=-1)  # [S*K]
 
         result = []
         prev_end = 0
+        K = UPSAMPLE_FACTOR
+        blank_id = 0
 
         for tok_idx, (start, end) in enumerate(offsets):
+            if start > prev_end:
+                result.append(norm[prev_end:start])
+
             if end - start != 1:
-                # CLS, SEP — skip
                 if end > start:
                     prev_end = end
                 continue
 
-            # Pass through any characters skipped by the tokenizer
-            if start > prev_end:
-                result.append(normalized[prev_end:start])
-
-            char = normalized[start:end]
+            char = norm[start:end]
             prev_end = end
 
-            if not _is_hebrew(char):
-                if char == "'" and start > 0 and normalized[start - 1] in "גזצץ":
-                    pass
-                else:
-                    result.append(char)
+            if char not in self._input_chars:
+                result.append(char)
                 continue
 
-            cid = int(consonant_preds[tok_idx])
-            allowed = self._letter_constraints.get(char)
-            if allowed is not None and cid not in allowed:
-                cid = max(allowed, key=lambda x: consonant_logits[0][tok_idx, x])
-            consonant = self._consonant_vocab.get(cid, "∅")
-            vowel = self._vowel_vocab.get(int(vowel_preds[tok_idx]), "∅")
-            stress = tok_idx in stressed_positions
+            # Greedy CTC decode over K slots for this char
+            slot_start = tok_idx * K
+            slot_preds = preds[slot_start:slot_start + K].tolist()
 
-            # Assemble IPA chunk: [consonant][ˈ][vowel]
-            # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
-            word_final = end >= len(normalized) or normalized[end] == " "
-            chunk = ""
-            if char == "ח" and word_final and vowel == "a":
-                if stress:
-                    chunk += STRESS_MARK
-                chunk += "aχ"
-            else:
-                if consonant != "∅":
-                    chunk += consonant
-                if stress:
-                    chunk += STRESS_MARK
-                if vowel != "∅":
-                    chunk += vowel
-            result.append(chunk)
+            tokens = []
+            prev = blank_id
+            for p in slot_preds:
+                if p != blank_id and p != prev:
+                    tok = self._id_to_token.get(p - 1, "")
+                    if tok and tok != "∅":
+                        tokens.append(tok)
+                prev = p
+            result.extend(tokens)
 
-        if prev_end < len(normalized):
-            result.append(normalized[prev_end:])
+        if prev_end < len(norm):
+            result.append(norm[prev_end:])
 
         return "".join(result)

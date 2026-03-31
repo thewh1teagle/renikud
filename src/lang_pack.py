@@ -19,6 +19,8 @@ class LangPack:
     input_chars: frozenset[str]
     output_tokens: tuple[str, ...]  # index 0 = null/silent token
     max_slot_len: int = 3           # max IPA tokens one char can emit
+    extra_chars: frozenset[str] = frozenset()  # script punctuation to include in vocab but not phonemize
+    strip_accents: bool = True  # False for languages where accents are phonemically meaningful (French, Spanish, etc.)
 
     def token_to_id(self) -> dict[str, int]:
         return {t: i for i, t in enumerate(self.output_tokens)}
@@ -42,6 +44,7 @@ HEBREW = LangPack(
     input_chars=frozenset(
         "אבגדהוזחטיכךלמםנןסעפףצץקרשת"
     ),
+    extra_chars=frozenset("\u05BE\u05F3\u05F4"),  # maqaf, geresh, gershayim
     output_tokens=(
         # 0 = null (silent, no output)
         "∅",

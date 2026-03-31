@@ -47,7 +47,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lang_pack = get_lang_pack(args.lang)
-    tokenizer = load_tokenizer(Path(__file__).parent.parent / "src" / "tokenizer.json")
+    tokenizer = load_tokenizer()
     model = G2PModel(lang_pack=lang_pack)
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()

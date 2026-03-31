@@ -23,18 +23,15 @@ import regex as re
 import datasets
 from tqdm import tqdm
 
-from constants import TOKENIZER_PATH, MAX_LEN
+from constants import MAX_LEN
 from lang_pack import get_lang_pack, LangPack
 from tokenization import load_tokenizer
 
-_IPA_PUNCT = re.compile(r"[!,\.?\s\"'()\[\]]")
-
-
 def tokenize_ipa(ipa: str, token_to_id: dict[str, int], sorted_tokens: list[str]) -> list[int] | None:
-    """Greedy longest-match IPA tokenization. Returns 1-indexed ids (0 = CTC blank)."""
-    ipa = _IPA_PUNCT.sub("", ipa)
-    if not ipa:
-        return []
+    """Greedy longest-match IPA tokenization. Returns 1-indexed ids (0 = CTC blank).
+    Unknown characters (punctuation, spaces, etc.) are skipped silently.
+    The lang pack is the sole source of truth for valid tokens.
+    """
     ids = []
     i = 0
     while i < len(ipa):
@@ -46,8 +43,8 @@ def tokenize_ipa(ipa: str, token_to_id: dict[str, int], sorted_tokens: list[str]
                 matched = True
                 break
         if not matched:
-            return None
-    return ids
+            i += 1  # skip unknown character
+    return ids or None
 
 
 def strip_nikud(text: str) -> str:
@@ -60,7 +57,7 @@ _worker_state: dict = {}
 
 def _init_worker(lang_name: str):
     lang_pack = get_lang_pack(lang_name)
-    tokenizer = load_tokenizer(TOKENIZER_PATH)
+    tokenizer = load_tokenizer(lang_pack=lang_pack)
     token_to_id = lang_pack.token_to_id()
     null_tok = lang_pack.output_tokens[0]
     sorted_tokens = sorted(

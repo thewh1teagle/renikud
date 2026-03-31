@@ -1,47 +1,43 @@
-"""
-Export HebrewG2PClassifier to a self-contained ONNX file with vocab metadata embedded.
+"""Export G2P CTC model to ONNX.
 
 Usage:
-    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier-v3/checkpoint-1200 --output model.onnx
-    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier-v3/checkpoint-1200 --output model.onnx --int8
+    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier/checkpoint-180000-unicode
+    uv run scripts/export.py --checkpoint ../outputs/g2p-classifier/checkpoint-180000-unicode --no-int8
 """
 
 import argparse
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
-# Must be set before importing model/encoder so NeoBERT uses ONNX-compatible ops
 os.environ["NEOBERT_ONNX_EXPORT"] = "1"
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import onnx
 import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
-from constants import CONSONANTS, VOWELS, TOKENIZER_PATH
+
 from infer import load_checkpoint
+from lang_pack import get_lang_pack
 from model import G2PModel
-from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS
-from tokenization import load_tokenizer
+from tokenization import CLS_ID, SEP_ID
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", default="model.onnx")
-    parser.add_argument("--int8", action=argparse.BooleanOptionalAction, default=True, help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
+    parser.add_argument("--lang", default="hebrew")
+    parser.add_argument("--int8", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
-    tokenizer = load_tokenizer(TOKENIZER_PATH)
-    vocab = tokenizer.get_vocab()  # {token: id}
-    tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
-
-    model = G2PModel()
+    lang_pack = get_lang_pack(args.lang)
+    model = G2PModel(lang_pack=lang_pack)
     load_checkpoint(model, args.checkpoint)
-    if args.int8:
-        model.float().eval()
-    else:
-        model.half().eval()
+    model.float().eval()
 
     dummy_ids = torch.zeros(1, 16, dtype=torch.long)
     dummy_mask = torch.ones(1, 16, dtype=torch.long)
@@ -54,16 +50,14 @@ def main():
 
     torch.onnx.export(
         model,
-        (dummy_ids, dummy_mask, tokenizer_vocab),
+        (dummy_ids, dummy_mask),
         export_path,
         input_names=["input_ids", "attention_mask"],
-        output_names=["consonant_logits", "vowel_logits", "stress_logits"],
+        output_names=["logits"],
         dynamic_axes={
-            "input_ids": {0: "batch", 1: "seq_len"},
+            "input_ids":      {0: "batch", 1: "seq_len"},
             "attention_mask": {0: "batch", 1: "seq_len"},
-            "consonant_logits": {0: "batch", 1: "seq_len"},
-            "vowel_logits": {0: "batch", 1: "seq_len"},
-            "stress_logits": {0: "batch", 1: "seq_len"},
+            "logits":         {0: "batch", 1: "seq_len"},
         },
         opset_version=18,
     )
@@ -73,44 +67,27 @@ def main():
         Path(export_path).unlink(missing_ok=True)
         Path(export_path + ".data").unlink(missing_ok=True)
 
+    # Embed metadata for inference without extra files
     onnx_model = onnx.load(args.output, load_external_data=True)
     meta = onnx_model.metadata_props
 
-    entry = meta.add()
-    entry.key = "vocab"
-    entry.value = json.dumps(vocab)
+    def add_meta(key, value):
+        e = meta.add()
+        e.key = key
+        e.value = value
 
-    entry = meta.add()
-    entry.key = "consonant_vocab"
-    entry.value = json.dumps({str(i): c for i, c in enumerate(CONSONANTS)})
-
-    entry = meta.add()
-    entry.key = "vowel_vocab"
-    entry.value = json.dumps({str(i): v for i, v in enumerate(VOWELS)})
-
-    entry = meta.add()
-    entry.key = "letter_consonant_constraints"
-    entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
-
-    entry = meta.add()
-    entry.key = "cls_token_id"
-    entry.value = str(tokenizer.cls_token_id)
-
-    entry = meta.add()
-    entry.key = "sep_token_id"
-    entry.value = str(tokenizer.sep_token_id)
-
-    entry = meta.add()
-    entry.key = "letter_consonant_mask"
-    entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
+    add_meta("lang", args.lang)
+    add_meta("cls_token_id", str(CLS_ID))
+    add_meta("sep_token_id", str(SEP_ID))
+    add_meta("output_tokens", json.dumps(list(lang_pack.output_tokens)))
+    add_meta("input_chars", json.dumps(sorted(lang_pack.input_chars)))
+    add_meta("upsample_factor", "3")
+    add_meta("strip_accents", str(lang_pack.strip_accents).lower())
 
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
+    Path(args.output + ".data").unlink(missing_ok=True)
 
-    data_file = Path(args.output + ".data")
-    if data_file.exists():
-        data_file.unlink()
-
-    quant_label = " (int8)" if args.int8 else " (fp16)"
+    quant_label = " (int8)" if args.int8 else " (fp32)"
     print(f"Exported to {args.output}{quant_label} ({Path(args.output).stat().st_size / 1e6:.1f} MB)")
 
 
