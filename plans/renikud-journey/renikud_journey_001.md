@@ -207,6 +207,25 @@ Teacher model (DictaBERT 300M): **87%**
 
 ---
 
+## V7 — NeoBERT Shrunk, 19M Params (Current)
+**Branch:** main
+
+Replaced the 100M ModernBERT encoder with a much smaller NeoBERT configuration: 6 layers,
+512 hidden, 8 heads — ~19M total parameters. Coupled classification heads (each head receives
+the raw logits of the previous head, so vowel knows about consonant, stress knows about both).
+
+### Results
+- **87.5% word accuracy** (250-sample benchmark, constrained decoding)
+- **20MB ONNX int8**
+- Beats the 300M DictaBERT teacher (87%) with 15× fewer parameters
+
+### Key Properties
+- Self-contained, no HuggingFace dependency at runtime
+- 20MB int8 ONNX — 5× smaller than V6's 113MB
+- Constrained decoding: consonant mask + one-stress-per-word enforced at inference
+
+---
+
 ## Key Lessons
 
 1. **Output format matters more than architecture** — switching from nikud to IPA

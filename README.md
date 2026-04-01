@@ -6,7 +6,7 @@ Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
 
 ## Architecture
 
-ModernBERT-base encoder trained from scratch (22 layers, 768 hidden, RoPE, Flash Attention) → three linear heads (consonant, vowel, stress) per Hebrew letter.
+NeoBERT encoder (~19M params) trained from scratch → three coupled classification heads (consonant, vowel, stress) per Hebrew letter.
 
 Each Hebrew letter gets exactly one output slot predicting a (consonant, vowel, stress) triple. Uses a custom character-level tokenizer built for Hebrew.
 

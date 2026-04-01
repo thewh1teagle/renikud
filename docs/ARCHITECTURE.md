@@ -12,14 +12,14 @@ This works because Hebrew has a nearly one-to-one letter→phoneme structure: ea
 
 ## Model
 
-`HebrewG2PClassifier` in `src/model.py`:
+`G2PModel` in `src/model.py`:
 
-1. **Encoder** — ModernBERT-base (22-layer, 768-dim, RoPE, Flash Attention), initialized from scratch with a custom 104-token Hebrew character vocabulary. Defined in `src/encoder.py`.
-2. **Three classification heads** — independent linear projections on top of each token's hidden state:
-   - **Consonant head** → 26 classes (`∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`)
-   - **Vowel head** → 7 classes (`∅ a e i o u`)
-   - **Stress head** → 2 classes (none / stressed)
-3. **Consonant masking** — before argmax, logits for phonetically impossible consonants are zeroed out (`-1e9`) using a precomputed per-letter mask from `phonology.py`. For example, ל can only ever produce `l` or `∅`, never `b`.
+1. **Encoder** — ModernBERT-style encoder initialized from scratch with a custom 104-token Hebrew character vocabulary. See `src/encoder.py` for the exact configuration (~19M params).
+2. **Three coupled classification heads** — each head sees the encoder hidden state *plus* the raw logits from the previous head, so later heads have information about earlier predictions rather than being blind to them:
+   - **Consonant head** → `hidden` → 26 classes (`∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`)
+   - **Vowel head** → `hidden + consonant_logits` → 7 classes (`∅ a e i o u`)
+   - **Stress head** → `hidden + consonant_logits + vowel_logits` → 2 classes (none / stressed)
+3. **Consonant masking** — logits for phonetically impossible consonants are zeroed out (`-1e9`) using a precomputed per-letter mask from `phonology.py`. For example, ל can only ever produce `l` or `∅`, never `b`.
 
 At inference (`src/infer.py`), the consonant mask is applied before argmax so the model can never predict a phonetically impossible consonant for a given letter — e.g. ק always decodes to `k`, never `v`. Each Hebrew letter position assembles its output as `[consonant][ˈ?][vowel?]`, with one exception: word-final ח with vowel `a` emits `[ˈ?]aχ` (furtive patah — the vowel precedes the consonant in IPA).
 
