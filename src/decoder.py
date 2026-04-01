@@ -97,7 +97,7 @@ def decode(
 
         # Assemble IPA chunk: [consonant][ˈ][vowel]
         # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
-        word_final = end >= len(text) or text[end] == " "
+        word_final = end >= len(text) or not text[end].isalpha()
         chunk = ""
         if char == FURTIVE_PATAH_LETTER and word_final and vowel == "a":
             if stress:

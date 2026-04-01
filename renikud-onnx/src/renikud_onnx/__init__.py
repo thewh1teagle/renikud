@@ -111,7 +111,7 @@ class G2P:
 
             # Assemble IPA chunk: [consonant][ˈ][vowel]
             # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
-            word_final = end >= len(normalized) or normalized[end] == " "
+            word_final = end >= len(normalized) or not normalized[end].isalpha()
             chunk = ""
             if char == "ח" and word_final and vowel == "a":
                 if stress:

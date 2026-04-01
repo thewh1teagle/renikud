@@ -201,7 +201,7 @@ impl G2P {
 
             // Assemble IPA chunk: [consonant][ˈ][vowel]
             // Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
-            let word_final = end >= normalized.len() || normalized[end..].starts_with(' ');
+            let word_final = end >= normalized.len() || normalized[end..].starts_with(|c: char| c.is_whitespace() || !c.is_alphabetic());
             if c == 'ח' && word_final && vowel == "a" {
                 if stressed {
                     result.push_str(STRESS);
