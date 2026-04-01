@@ -21,7 +21,7 @@ from onnxruntime.quantization import QuantType, quantize_dynamic
 from constants import CONSONANTS, VOWELS, TOKENIZER_PATH
 from infer import load_checkpoint
 from model import G2PModel
-from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS
+from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS, HEBREW_LETTER_CONSONANTS, LETTERS_WITH_GERESH
 from tokenization import load_tokenizer
 
 
@@ -103,6 +103,10 @@ def main():
     entry = meta.add()
     entry.key = "letter_consonant_mask"
     entry.value = json.dumps({letter: list(ids) for letter, ids in HEBREW_LETTER_TO_ALLOWED_CONSONANTS.items()})
+
+    entry = meta.add()
+    entry.key = "geresh_map"
+    entry.value = json.dumps({letter: HEBREW_LETTER_CONSONANTS[letter][1] for letter in LETTERS_WITH_GERESH if letter in HEBREW_LETTER_CONSONANTS and len(HEBREW_LETTER_CONSONANTS[letter]) >= 2})
 
     onnx.save_model(onnx_model, args.output, save_as_external_data=False)
 

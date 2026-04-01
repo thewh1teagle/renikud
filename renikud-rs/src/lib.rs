@@ -18,6 +18,7 @@ pub struct G2P {
     consonant_vocab: HashMap<i64, String>,
     vowel_vocab: HashMap<i64, String>,
     letter_consonant_mask: HashMap<char, Vec<i64>>,
+    geresh_map: HashMap<char, String>,
     cls_id: i64,
     sep_id: i64,
 }
@@ -29,15 +30,16 @@ impl G2P {
     }
 
     pub fn from_session(session: Session) -> anyhow::Result<Self> {
-        let (vocab_json, consonant_vocab_json, vowel_vocab_json, letter_consonant_mask_json, cls_id, sep_id) = {
+        let (vocab_json, consonant_vocab_json, vowel_vocab_json, letter_consonant_mask_json, geresh_map_json, cls_id, sep_id) = {
             let meta = session.metadata()?;
             let vocab_json = meta.custom("vocab").ok_or_else(|| anyhow::anyhow!("missing vocab"))?;
             let consonant_vocab_json = meta.custom("consonant_vocab").ok_or_else(|| anyhow::anyhow!("missing consonant_vocab"))?;
             let vowel_vocab_json = meta.custom("vowel_vocab").ok_or_else(|| anyhow::anyhow!("missing vowel_vocab"))?;
             let letter_consonant_mask_json = meta.custom("letter_consonant_mask").ok_or_else(|| anyhow::anyhow!("missing letter_consonant_mask"))?;
+            let geresh_map_json = meta.custom("geresh_map").unwrap_or_else(|| "{}".to_string());
             let cls_id: i64 = meta.custom("cls_token_id").ok_or_else(|| anyhow::anyhow!("missing cls_token_id"))?.parse()?;
             let sep_id: i64 = meta.custom("sep_token_id").ok_or_else(|| anyhow::anyhow!("missing sep_token_id"))?.parse()?;
-            (vocab_json, consonant_vocab_json, vowel_vocab_json, letter_consonant_mask_json, cls_id, sep_id)
+            (vocab_json, consonant_vocab_json, vowel_vocab_json, letter_consonant_mask_json, geresh_map_json, cls_id, sep_id)
         };
 
         let raw_vocab: HashMap<String, i64> = serde_json::from_str(&vocab_json)?;
@@ -64,7 +66,13 @@ impl G2P {
             .filter_map(|(k, v)| k.chars().next().map(|c| (c, v)))
             .collect();
 
-        Ok(Self { session, vocab, consonant_vocab, vowel_vocab, letter_consonant_mask, cls_id, sep_id })
+        let raw_geresh: HashMap<String, String> = serde_json::from_str(&geresh_map_json)?;
+        let geresh_map: HashMap<char, String> = raw_geresh
+            .into_iter()
+            .filter_map(|(k, v)| k.chars().next().map(|c| (c, v)))
+            .collect();
+
+        Ok(Self { session, vocab, consonant_vocab, vowel_vocab, letter_consonant_mask, geresh_map, cls_id, sep_id })
     }
 
     fn tokenize(&self, text: &str) -> (Vec<i64>, Vec<i64>, Vec<(usize, usize)>) {
@@ -174,6 +182,13 @@ impl G2P {
             prev_end = end;
 
             if !is_hebrew(c) {
+                // Skip geresh apostrophe after a geresh letter
+                if c == '\'' && start > 0 {
+                    let prev_char = normalized[..start].chars().next_back();
+                    if prev_char.map_or(false, |pc| self.geresh_map.contains_key(&pc)) {
+                        continue;
+                    }
+                }
                 result.push(c);
                 continue;
             }
@@ -196,7 +211,17 @@ impl G2P {
             let vowel_id = argmax(&vowel_data, tok_idx * num_vowels, num_vowels);
             let stressed = stressed_positions.contains(&tok_idx);
 
-            let consonant = self.consonant_vocab.get(&consonant_id).map(String::as_str).unwrap_or("∅");
+            let consonant_str: String;
+            let consonant = if let Some(geresh) = self.geresh_map.get(&c) {
+                if normalized[end..].starts_with('\'') {
+                    geresh.as_str()
+                } else {
+                    self.consonant_vocab.get(&consonant_id).map(String::as_str).unwrap_or("∅")
+                }
+            } else {
+                consonant_str = self.consonant_vocab.get(&consonant_id).map(|s| s.clone()).unwrap_or_else(|| "∅".to_string());
+                &consonant_str
+            };
             let vowel = self.vowel_vocab.get(&vowel_id).map(String::as_str).unwrap_or("∅");
 
             // Assemble IPA chunk: [consonant][ˈ][vowel]

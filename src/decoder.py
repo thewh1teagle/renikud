@@ -95,6 +95,13 @@ def decode(
                 consonant = ID_TO_CONSONANT[cid]
                 break
 
+        # Geresh rule: if next char is apostrophe, force the geresh consonant variant
+        if char in LETTERS_WITH_GERESH and end < len(text) and text[end] == "'":
+            from phonology import HEBREW_LETTER_CONSONANTS
+            variants = HEBREW_LETTER_CONSONANTS.get(char, ())
+            if len(variants) >= 2:
+                consonant = variants[1]
+
         # Assemble IPA chunk: [consonant][ˈ][vowel]
         # Exception: word-final ח with vowel a — furtive patah flips to [ˈ]aχ
         word_final = end >= len(text) or not text[end].isalpha()
