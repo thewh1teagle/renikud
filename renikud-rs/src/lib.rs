@@ -84,7 +84,7 @@ impl G2P {
 
     pub fn phonemize(&mut self, text: &str) -> anyhow::Result<String> {
         let normalized: String = text.nfd().collect();
-        let (ids, mask, offsets) = self.tokenize(text);
+        let (ids, mask, offsets) = self.tokenize(&normalized);
         let len = ids.len();
 
         let input_ids = Tensor::<i64>::from_array(([1, len], ids.into_boxed_slice()))?;
