@@ -33,108 +33,75 @@ def strip_nikud(text: str) -> str:
 
 def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
     """
-    Align a single Hebrew word to its IPA using DP.
-    Returns list of (hebrew_char, ipa_chunk) or None if no valid alignment found.
-
-    Each IPA chunk has the form: [consonant] [stress?] [vowel?]
-    where consonant comes from the letter's allowed set.
+    Align a Hebrew word to IPA using cost-based DP.
+    Each letter consumes one IPA chunk: [consonant][stress?][vowel?]
+    Silent letters (ה/א/ע/etc acting as matres) consume nothing (empty chunk).
+    Cost = number of empty chunks; minimizing this prefers consonants over silence.
     """
-    n = len(heb_word)
-    m = len(ipa_word)
-
-    # dp[i][j] = True if we can align heb_word[:i] to ipa_word[:j]
-    # back[i][j] = j_prev to reconstruct the path
-    dp = [[False] * (m + 1) for _ in range(n + 1)]
+    n, m = len(heb_word), len(ipa_word)
+    INF = float("inf")
+    cost = [[INF] * (m + 1) for _ in range(n + 1)]
     back = [[-1] * (m + 1) for _ in range(n + 1)]
-    dp[0][0] = True
+    cost[0][0] = 0
 
     for i in range(1, n + 1):
         char = heb_word[i - 1]
-        allowed = HEBREW_CONSONANTS.get(char, ("",))
+        is_last = i == n
 
         for j_prev in range(m + 1):
-            if not dp[i - 1][j_prev]:
+            if cost[i - 1][j_prev] == INF:
                 continue
-
+            c = cost[i - 1][j_prev]
             rest = ipa_word[j_prev:]
 
-            # Try each allowed consonant for this letter
-            for consonant in allowed:
-                pos = 0
+            def update(length: int, penalty: int = 0) -> None:
+                k = j_prev + length
+                if k <= m and c + penalty < cost[i][k]:
+                    cost[i][k] = c + penalty
+                    back[i][k] = j_prev
 
-                # Match consonant prefix
-                if consonant and not rest[pos:].startswith(consonant):
+            for consonant in HEBREW_CONSONANTS.get(char, ("",)):
+                if not consonant:
+                    update(0, penalty=1)
                     continue
-                pos += len(consonant)
-
-                # Optionally consume stress mark
-                stress_pos = pos
-                if pos < len(rest) and rest[pos] == STRESS:
-                    stress_pos = pos + 1
-
-                # Try with and without stress, with and without vowel
-                for s in (stress_pos, pos):  # with stress or without
-                    # Try each vowel or no vowel
+                if not rest.startswith(consonant):
+                    continue
+                pos = len(consonant)
+                s = pos + 1 if pos < len(rest) and rest[pos] == STRESS else pos
+                for stress_end in ({s, pos} if s != pos else {pos}):
                     for vowel in VOWELS + ("",):
-                        v_pos = s
                         if vowel:
-                            if not rest[s:].startswith(vowel):
-                                continue
-                            v_pos = s + len(vowel)
-                        j_new = j_prev + v_pos
-                        if j_new <= m and not dp[i][j_new]:
-                            dp[i][j_new] = True
-                            back[i][j_new] = j_prev
+                            if rest[stress_end:].startswith(vowel):
+                                update(stress_end + len(vowel))
+                        else:
+                            update(stress_end)
 
-            # Special case: word-final ח — furtive patah.
-            # IPA encodes it as [stress?][vowel]χ (vowel before consonant).
-            # We consume this reversed chunk and store it as (χ, vowel) like any other letter.
-            # Only applies when ח is the last letter of the word (i == n).
-            if char == "ח" and i == n:
-                for vowel in VOWELS + ("",):
-                    for has_stress in (True, False):
-                        pos = 0
-                        if has_stress:
-                            if not rest.startswith(STRESS):
-                                continue
-                            pos = 1
-                        if vowel:
-                            if not rest[pos:].startswith(vowel):
-                                continue
-                            pos += len(vowel)
-                        if rest[pos:].startswith("χ"):
-                            j_new = j_prev + pos + 1  # +1 for χ
-                            if j_new <= m and not dp[i][j_new]:
-                                dp[i][j_new] = True
-                                back[i][j_new] = j_prev
-
-            # Special case: ו/י as pure vowel (u, o, i) with optional stress
+            # ו/י as pure vowel (with optional preceding stress)
             if char in ("ו", "י"):
                 vowel_map = {"ו": ("u", "o"), "י": ("i",)}
                 for vowel in vowel_map[char]:
-                    for s_offset in (0, 1):  # without/with preceding stress
-                        pos = 0
-                        if s_offset and (not rest or rest[0] != STRESS):
+                    for s in (1, 0):
+                        if s and (not rest or rest[0] != STRESS):
                             continue
-                        pos += s_offset
-                        if rest[pos:].startswith(vowel):
-                            j_new = j_prev + pos + len(vowel)
-                            if j_new <= m and not dp[i][j_new]:
-                                dp[i][j_new] = True
-                                back[i][j_new] = j_prev
+                        if rest[s:].startswith(vowel):
+                            update(s + len(vowel))
 
-    if not dp[n][m]:
+            # Word-final ח furtive patah: [stress?][vowel]χ
+            if char == "ח" and is_last:
+                s = 1 if rest.startswith(STRESS) else 0
+                for vowel in VOWELS + ("",):
+                    p = s + len(vowel) if vowel and rest[s:].startswith(vowel) else (s if not vowel else None)
+                    if p is not None and rest[p:].startswith("χ"):
+                        update(p + 1, penalty=1)
+
+    if cost[n][m] == INF:
         return None
-
-    # Reconstruct path
-    chunks = []
-    j = m
+    chunks, j = [], m
     for i in range(n, 0, -1):
         j_prev = back[i][j]
         chunks.append((heb_word[i - 1], ipa_word[j_prev:j]))
         j = j_prev
-    chunks.reverse()
-    return chunks
+    return chunks[::-1]
 
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
