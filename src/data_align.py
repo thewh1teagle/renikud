@@ -1,235 +1,144 @@
-"""
-Align Hebrew characters to IPA chunks using a DP aligner.
+"""Align Hebrew letters to IPA chunks."""
 
-Each Hebrew letter is assigned exactly one IPA chunk (consonant + optional vowel + optional stress).
-The alignment is constrained by the known possible phonemes per Hebrew letter.
-
-Usage:
-    uv run src/data_align.py dataset/train.tsv ./dataset/train_alignment.jsonl
-
-Input TSV:   hebrew_text<TAB>ipa_text  (one sentence per line, Hebrew may have nikud)
-Output JSONL: one JSON object per line, key=hebrew sentence, value=[[char, ipa_chunk], ...]
-              failures saved to <output>_failures.txt
-"""
-
+import multiprocessing as mp
 import argparse
 import json
+import re
 import unicodedata
-import multiprocessing as mp
-import regex as re
+
 from tqdm import tqdm
 
 from phonology import HEBREW_LETTER_CONSONANTS as HEBREW_CONSONANTS
 
 VOWELS = ("a", "e", "i", "o", "u")
 STRESS = "ˈ"
-SPACE = " "
+HEB_RE = r"[^\u05d0-\u05ea]"
+IPA_RE = r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]"
 
 
 def strip_nikud(text: str) -> str:
-    text = unicodedata.normalize("NFD", text)
-    return re.sub(r"[\p{M}|]", "", text)
+    return re.sub(r"[\p{M}|]", "", unicodedata.normalize("NFD", text))
+
+
+def _chunk_pattern(char: str) -> str:
+    """Regex capture group for the IPA chunk a single Hebrew letter produces."""
+    allowed = HEBREW_CONSONANTS.get(char, ("",))
+    cons_alts = sorted([re.escape(c) for c in allowed if c], key=len, reverse=True)
+    has_silent = "" in allowed
+
+    vowel_re = f"ˈ?(?:{'|'.join(VOWELS)})?"
+
+    patterns = []
+
+    if cons_alts:
+        cons_re = "|".join(cons_alts)
+        cons_re = f"(?:{cons_re})" if len(cons_alts) > 1 else cons_alts[0]
+        patterns.append(f"{cons_re}{vowel_re}")
+
+    if char == "ו":
+        patterns.append(r"ˈ?(?:u|o)")
+    if char == "י":
+        patterns.append(r"ˈ?i")
+
+    if char == "ח":
+        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})?χ")
+
+    if has_silent:
+        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})|ˈ|")
+
+    combined = "|".join(f"(?:{p})" for p in patterns if p)
+    if has_silent or char in ("ו", "י"):
+        combined += "|"
+    return f"({combined})"
+
+
+_LETTER_PATTERNS: dict[str, str] = {
+    char: _chunk_pattern(char) for char in HEBREW_CONSONANTS
+}
 
 
 def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
-    """
-    Align a single Hebrew word to its IPA using DP.
-    Returns list of (hebrew_char, ipa_chunk) or None if no valid alignment found.
-
-    Each IPA chunk has the form: [consonant] [stress?] [vowel?]
-    where consonant comes from the letter's allowed set.
-    """
-    n = len(heb_word)
-    m = len(ipa_word)
-
-    # dp[i][j] = True if we can align heb_word[:i] to ipa_word[:j]
-    # back[i][j] = j_prev to reconstruct the path
-    dp = [[False] * (m + 1) for _ in range(n + 1)]
-    back = [[-1] * (m + 1) for _ in range(n + 1)]
-    dp[0][0] = True
-
-    for i in range(1, n + 1):
-        char = heb_word[i - 1]
-        allowed = HEBREW_CONSONANTS.get(char, ("",))
-
-        for j_prev in range(m + 1):
-            if not dp[i - 1][j_prev]:
-                continue
-
-            rest = ipa_word[j_prev:]
-
-            # Try each allowed consonant for this letter
-            for consonant in allowed:
-                pos = 0
-
-                # Match consonant prefix
-                if consonant and not rest[pos:].startswith(consonant):
-                    continue
-                pos += len(consonant)
-
-                # Optionally consume stress mark
-                stress_pos = pos
-                if pos < len(rest) and rest[pos] == STRESS:
-                    stress_pos = pos + 1
-
-                # Try with and without stress, with and without vowel
-                for s in (stress_pos, pos):  # with stress or without
-                    # Try each vowel or no vowel
-                    for vowel in VOWELS + ("",):
-                        v_pos = s
-                        if vowel:
-                            if not rest[s:].startswith(vowel):
-                                continue
-                            v_pos = s + len(vowel)
-                        j_new = j_prev + v_pos
-                        if j_new <= m and not dp[i][j_new]:
-                            dp[i][j_new] = True
-                            back[i][j_new] = j_prev
-
-            # Special case: word-final ח — furtive patah.
-            # IPA encodes it as [stress?][vowel]χ (vowel before consonant).
-            # We consume this reversed chunk and store it as (χ, vowel) like any other letter.
-            # Only applies when ח is the last letter of the word (i == n).
-            if char == "ח" and i == n:
-                for vowel in VOWELS + ("",):
-                    for has_stress in (True, False):
-                        pos = 0
-                        if has_stress:
-                            if not rest.startswith(STRESS):
-                                continue
-                            pos = 1
-                        if vowel:
-                            if not rest[pos:].startswith(vowel):
-                                continue
-                            pos += len(vowel)
-                        if rest[pos:].startswith("χ"):
-                            j_new = j_prev + pos + 1  # +1 for χ
-                            if j_new <= m and not dp[i][j_new]:
-                                dp[i][j_new] = True
-                                back[i][j_new] = j_prev
-
-            # Special case: ו/י as pure vowel (u, o, i) with optional stress
-            if char in ("ו", "י"):
-                vowel_map = {"ו": ("u", "o"), "י": ("i",)}
-                for vowel in vowel_map[char]:
-                    for s_offset in (0, 1):  # without/with preceding stress
-                        pos = 0
-                        if s_offset and (not rest or rest[0] != STRESS):
-                            continue
-                        pos += s_offset
-                        if rest[pos:].startswith(vowel):
-                            j_new = j_prev + pos + len(vowel)
-                            if j_new <= m and not dp[i][j_new]:
-                                dp[i][j_new] = True
-                                back[i][j_new] = j_prev
-
-    if not dp[n][m]:
+    """Align one Hebrew word to one IPA word."""
+    pattern = "".join(_LETTER_PATTERNS.get(c, r"(\S*)") for c in heb_word)
+    m = re.fullmatch(pattern, ipa_word)
+    if m is None:
         return None
-
-    # Reconstruct path
-    chunks = []
-    j = m
-    for i in range(n, 0, -1):
-        j_prev = back[i][j]
-        chunks.append((heb_word[i - 1], ipa_word[j_prev:j]))
-        j = j_prev
-    chunks.reverse()
-    return chunks
+    return list(zip(heb_word, m.groups()))
 
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
-    """
-    Align a full sentence by splitting on spaces and aligning word by word.
-    Non-Hebrew characters (punctuation, digits) are stripped before alignment.
-    Spaces are passed through as (' ', ' ').
-    """
-    heb_words = heb.split(" ")
-    ipa_words = ipa.split(" ")
+    """Align a sentence."""
+    heb_words, ipa_words = heb.split(), ipa.split()
 
     if len(heb_words) != len(ipa_words):
         return None
 
     result = []
-    for i, (hw, iw) in enumerate(zip(heb_words, ipa_words)):
-        if not hw:
-            continue
-
-        # Keep only Hebrew letters for alignment
-        heb_core = re.sub(r"[^\u05d0-\u05ea]", "", hw)
-        # Keep only IPA phoneme characters (strip punctuation like . , ? !)
-        ipa_core = re.sub(r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]", "", iw)
-
+    for hw, iw in zip(heb_words, ipa_words):
+        heb_core = re.sub(HEB_RE, "", hw)
+        ipa_core = re.sub(IPA_RE, "", iw)
         if not heb_core:
             continue
-
-        aligned = align_word(heb_core, ipa_core)
-        if aligned is None:
+        if (aligned := align_word(heb_core, ipa_core)) is None:
             return None
-        result.extend(aligned)
-
-        if i < len(heb_words) - 1:
+        if result:
             result.append((" ", " "))
+        result.extend(aligned)
 
     return result
 
 
 def process_chunk(lines: list[str]) -> list[tuple[str, list | None, str] | None]:
-    """Align a batch of TSV lines. Returns list of (heb, result, ipa) or None to skip."""
+    """Align TSV lines."""
     out = []
     for line in lines:
-        line = line.strip()
-        if not line:
+        heb_raw, sep, ipa = line.strip().partition("\t")
+        if sep:
+            heb = strip_nikud(heb_raw)
+            out.append((heb, align_sentence(heb, ipa), ipa))
+        else:
             out.append(None)
-            continue
-        parts = line.split("\t")
-        if len(parts) != 2:
-            out.append(None)
-            continue
-        heb_raw, ipa = parts
-        heb = strip_nikud(heb_raw)
-        result = align_sentence(heb, ipa)
-        out.append((heb, result, ipa))
     return out
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Align Hebrew chars to IPA chunks via DP")
+    parser = argparse.ArgumentParser(
+        description="Align Hebrew chars to IPA chunks via regex"
+    )
     parser.add_argument("input", help="Input TSV file (hebrew<TAB>ipa)")
     parser.add_argument("output", help="Output JSONL file (one sentence per line)")
     parser.add_argument("--workers", type=int, default=mp.cpu_count())
     args = parser.parse_args()
 
-    total = 0
-    aligned_count = 0
-    failed_count = 0
+    total = aligned_count = failed_count = 0
 
     failures_path = args.output.replace(".jsonl", "_failures.txt")
     with open(args.input, encoding="utf-8") as fin:
-        lines = fin.readlines()
+        lines = list(fin)
 
     chunk_size = max(1, len(lines) // (args.workers * 4))
-    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+    chunks = [lines[i : i + chunk_size] for i in range(0, len(lines), chunk_size)]
 
-    with open(args.output, "w", encoding="utf-8") as fout, \
-         open(failures_path, "w", encoding="utf-8") as ffail, \
-         mp.Pool(args.workers) as pool:
-
-        for batch in tqdm(pool.imap(process_chunk, chunks), total=len(chunks), desc="Aligning"):
-            for item in batch:
-                if item is None:
-                    continue
-                heb, result, ipa = item
+    with (
+        open(args.output, "w", encoding="utf-8") as fout,
+        open(failures_path, "w", encoding="utf-8") as ffail,
+        mp.Pool(args.workers) as pool,
+    ):
+        for batch in tqdm(
+            pool.imap(process_chunk, chunks), total=len(chunks), desc="Aligning"
+        ):
+            for heb, result, ipa in filter(None, batch):
                 total += 1
-                if result is None:
-                    failed_count += 1
-                    ffail.write(f"{heb}\t{ipa}\n")
-                else:
+                if result is not None:
                     aligned_count += 1
                     fout.write(json.dumps({heb: result}, ensure_ascii=False) + "\n")
+                else:
+                    failed_count += 1
+                    ffail.write(f"{heb}\t{ipa}\n")
 
     print(f"\nTotal:    {total:,}")
-    print(f"Aligned:  {aligned_count:,} ({aligned_count/total:.1%})")
-    print(f"Failed:   {failed_count:,} ({failed_count/total:.1%})")
+    print(f"Aligned:  {aligned_count:,} ({aligned_count / total:.1%})")
+    print(f"Failed:   {failed_count:,} ({failed_count / total:.1%})")
 
 
 if __name__ == "__main__":

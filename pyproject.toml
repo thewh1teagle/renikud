@@ -51,6 +51,11 @@ torch = [
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
