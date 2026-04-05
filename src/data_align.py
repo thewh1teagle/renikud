@@ -3,53 +3,15 @@
 import multiprocessing as mp
 import argparse
 import json
+import re
 import unicodedata
-from functools import lru_cache
 
-import regex as re
 from tqdm import tqdm
 
 from phonology import HEBREW_LETTER_CONSONANTS as HEBREW_CONSONANTS
 
 VOWELS = ("a", "e", "i", "o", "u")
 STRESS = "ˈ"
-VOWEL_CARRIERS = {"ו": ("u", "o"), "י": ("i",)}
-DEFAULT_ORDER = (
-    "plain",
-    "vowel",
-    "stressed_vowel",
-    "carrier",
-    "furtive",
-    "stressed",
-    "silent",
-)
-VOWEL_ORDER = (
-    "vowel",
-    "stressed_vowel",
-    "plain",
-    "carrier",
-    "furtive",
-    "stressed",
-    "silent",
-)
-GLIDE_ORDER = (
-    "stressed_vowel",
-    "vowel",
-    "plain",
-    "carrier",
-    "furtive",
-    "stressed",
-    "silent",
-)
-SILENT_ORDER = (
-    "silent",
-    "plain",
-    "vowel",
-    "stressed_vowel",
-    "carrier",
-    "furtive",
-    "stressed",
-)
 HEB_RE = r"[^\u05d0-\u05ea]"
 IPA_RE = r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]"
 
@@ -58,86 +20,50 @@ def strip_nikud(text: str) -> str:
     return re.sub(r"[\p{M}|]", "", unicodedata.normalize("NFD", text))
 
 
-def _ordered_candidates(heb_word: str, ipa_word: str, i: int, j: int) -> list[str]:
-    char = heb_word[i]
-    rest = ipa_word[j:]
-    same_prev = i > 0 and heb_word[i - 1] == char
-    next_char = heb_word[i + 1] if i + 1 < len(heb_word) else ""
-    next_next = heb_word[i + 2] if i + 2 < len(heb_word) else ""
-    same_next = next_char == char
-    is_last = i == len(heb_word) - 1
+def _chunk_pattern(char: str) -> str:
+    """Regex capture group for the IPA chunk a single Hebrew letter produces."""
     allowed = HEBREW_CONSONANTS.get(char, ("",))
-    allow_repeat_silent = same_prev or (same_next and "" in allowed)
-    vowel_first = next_char == next_next == "י" or (
-        next_char == "ח" and i + 1 == len(heb_word) - 1
-    )
-    glide_first = same_next and (
-        (char == "ו" and rest.startswith("w")) or (char == "י" and rest.startswith("j"))
-    )
+    cons_alts = sorted([re.escape(c) for c in allowed if c], key=len, reverse=True)
+    has_silent = "" in allowed
 
-    groups = {key: [] for key in DEFAULT_ORDER}
-    for consonant in allowed:
-        if not consonant or not rest.startswith(consonant):
-            continue
-        tail = rest[len(consonant) :]
-        groups["plain"].append(consonant)
-        if tail.startswith(STRESS):
-            stressed = consonant + STRESS
-            stressed_tail = tail[1:]
-            groups["stressed"].append(stressed)
-            groups["stressed_vowel"].extend(
-                stressed + vowel for vowel in VOWELS if stressed_tail.startswith(vowel)
-            )
-        groups["vowel"].extend(
-            consonant + vowel for vowel in VOWELS if tail.startswith(vowel)
-        )
+    vowel_re = f"ˈ?(?:{'|'.join(VOWELS)})?"
 
-    for vowel in VOWEL_CARRIERS.get(char, ()):
-        groups["carrier"].extend(
-            chunk for chunk in (STRESS + vowel, vowel) if rest.startswith(chunk)
-        )
+    patterns = []
 
-    if is_last and char == "ח":
-        for stress in (STRESS, ""):
-            groups["furtive"].extend(
-                stress + vowel + "χ"
-                for vowel in (*VOWELS, "")
-                if rest.startswith(stress + vowel + "χ")
-            )
+    if cons_alts:
+        cons_re = "|".join(cons_alts)
+        cons_re = f"(?:{cons_re})" if len(cons_alts) > 1 else cons_alts[0]
+        patterns.append(f"{cons_re}{vowel_re}")
 
-    if "" in allowed or allow_repeat_silent:
-        groups["silent"].append("")
+    if char == "ו":
+        patterns.append(r"ˈ?(?:u|o)")
+    if char == "י":
+        patterns.append(r"ˈ?i")
 
-    order = DEFAULT_ORDER
+    if char == "ח":
+        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})?χ")
 
-    if same_next:
-        if glide_first:
-            order = GLIDE_ORDER
-        elif char not in ("ו", "י") and "" in allowed:
-            order = SILENT_ORDER
-    elif vowel_first:
-        order = VOWEL_ORDER
+    if has_silent:
+        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})|ˈ|")
 
-    return list(
-        dict.fromkeys(chunk for group_name in order for chunk in groups[group_name])
-    )
+    combined = "|".join(f"(?:{p})" for p in patterns if p)
+    if has_silent or char in ("ו", "י"):
+        combined += "|"
+    return f"({combined})"
+
+
+_LETTER_PATTERNS: dict[str, str] = {
+    char: _chunk_pattern(char) for char in HEBREW_CONSONANTS
+}
 
 
 def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
     """Align one Hebrew word to one IPA word."""
-    n = len(heb_word)
-
-    @lru_cache(maxsize=None)
-    def solve(i: int, j: int) -> tuple[tuple[str, str], ...] | None:
-        if i == n:
-            return () if j == len(ipa_word) else None
-
-        for chunk in _ordered_candidates(heb_word, ipa_word, i, j):
-            if (tail := solve(i + 1, j + len(chunk))) is not None:
-                return ((heb_word[i], chunk),) + tail
+    pattern = "".join(_LETTER_PATTERNS.get(c, r"(\S*)") for c in heb_word)
+    m = re.fullmatch(pattern, ipa_word)
+    if m is None:
         return None
-
-    return list(result) if (result := solve(0, 0)) is not None else None
+    return list(zip(heb_word, m.groups()))
 
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
@@ -177,7 +103,7 @@ def process_chunk(lines: list[str]) -> list[tuple[str, list | None, str] | None]
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Align Hebrew chars to IPA chunks via DP"
+        description="Align Hebrew chars to IPA chunks via regex"
     )
     parser.add_argument("input", help="Input TSV file (hebrew<TAB>ipa)")
     parser.add_argument("output", help="Output JSONL file (one sentence per line)")
