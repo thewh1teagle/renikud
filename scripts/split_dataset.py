@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
+    print('Splitting dataset...')
     lines = args.input.read_text(encoding="utf-8").splitlines()
     random.seed(args.seed)
     random.shuffle(lines)

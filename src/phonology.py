@@ -19,10 +19,8 @@ from __future__ import annotations
 import torch
 
 from constants import CONSONANT_TO_ID, ALEF_ORD, TAF_ORD, NUM_CONSONANT_CLASSES, is_hebrew_letter
+from aligner.align import HEBREW_LETTER_CONSONANTS
 
-# ---------------------------------------------------------------------------
-# Letter → allowed consonant symbols
-# "" = silent (∅)
 # ---------------------------------------------------------------------------
 # Letter whose word-final + vowel-a chunk reverses to [vowel]χ (furtive patah)
 FURTIVE_PATAH_LETTER: str = "ח"
@@ -30,40 +28,6 @@ FURTIVE_PATAH_IPA: str = "aχ"  # the reversed IPA output: vowel precedes conson
 
 # Letters where a following apostrophe is a digraph marker, not punctuation
 LETTERS_WITH_GERESH: frozenset[str] = frozenset("גזצץ")
-
-# ---------------------------------------------------------------------------
-# Letter → allowed consonant symbols
-# "" = silent (∅)
-# ---------------------------------------------------------------------------
-HEBREW_LETTER_CONSONANTS: dict[str, tuple[str, ...]] = {
-    "א": ("ʔ", ""),
-    "ב": ("b", "v"),
-    "ג": ("ɡ", "dʒ"),
-    "ד": ("d",),
-    "ה": ("h", ""),
-    "ו": ("v", "w", ""),
-    "ז": ("z", "ʒ"),
-    "ח": ("χ",),
-    "ט": ("t",),
-    "י": ("j", ""),
-    "כ": ("k", "χ"),
-    "ך": ("k", "χ"),
-    "ל": ("l",),
-    "מ": ("m",),
-    "ם": ("m",),
-    "נ": ("n",),
-    "ן": ("n",),
-    "ס": ("s",),
-    "ע": ("ʔ", ""),
-    "פ": ("p", "f"),
-    "ף": ("p", "f"),
-    "צ": ("ts", "tʃ"),
-    "ץ": ("ts", "tʃ"),
-    "ק": ("k",),
-    "ר": ("ʁ",),
-    "ש": ("ʃ", "s", ""),
-    "ת": ("t",),
-}
 
 # ID-keyed view derived from above — used for masking and inference
 HEBREW_LETTER_CONSONANT_IDS: dict[str, tuple[int, ...]] = {
