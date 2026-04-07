@@ -3,7 +3,7 @@
 import multiprocessing as mp
 import argparse
 import json
-import re
+import regex as re
 import unicodedata
 
 from tqdm import tqdm
