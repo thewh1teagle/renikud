@@ -30,3 +30,4 @@ model-he/
 *.wav
 *.tar.gz
 backup_checkpoints/
+cmd/align/align

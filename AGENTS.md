@@ -13,6 +13,14 @@
     - Create scripts: `uv init --script example.py --python 3.12`
     - Run inline: `uv run python -c "print('Hello, world!')"`
 
+## Code Quality
+
+After editing Python files, run:
+
+```bash
+uv run ruff check
+```
+
 ## Validation
 
 For each plan, you can create self-contained validation scripts.

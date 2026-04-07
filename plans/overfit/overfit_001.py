@@ -98,7 +98,7 @@ def main():
         if predicted == expected_ipa:
             matches += 1
         else:
-            print(f"MISMATCH")
+            print(f"MISMATCH")  # noqa: F541
             print(f"  input:    {hebrew}")
             print(f"  expected: {expected_ipa}")
             print(f"  got:      {predicted}")

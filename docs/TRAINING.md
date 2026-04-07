@@ -1,5 +1,10 @@
 # Training
 
+## Prerequisites
+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
+- [Go](https://go.dev/) — required to build the aligner
+
 ## Commands
 
 ### 1. Prepare dataset
@@ -8,16 +13,12 @@
 ./scripts/train_prepare.sh dataset/data.tsv
 ```
 
-### 2. Train from scratch
+### 2. Train
 
 ```console
-./scripts/train_scratch.sh
-```
-
-### 3. Fine-tune from a checkpoint
-
-```console
-./scripts/train_finetune.sh outputs/g2p-classifier/checkpoint-5000
+./scripts/train.sh                                                    # from scratch
+./scripts/train.sh --resume outputs/g2p-classifier/checkpoint-5000   # resume
+./scripts/train.sh --resume outputs/g2p-classifier/checkpoint-5000 --reset-steps  # finetune (load weights, reset steps)
 ```
 
 ## Upload Checkpoint to HuggingFace
@@ -30,56 +31,25 @@
 
 ```console
 ./scripts/download_checkpoint.sh                  # downloads to ./checkpoint
-```
-
-To fine-tune from a downloaded checkpoint:
-
-```console
-./scripts/download_checkpoint.sh checkpoint
-./scripts/train_finetune.sh checkpoint
+./scripts/train.sh --resume checkpoint --reset-steps  # finetune from downloaded
 ```
 
 ## CUDA Version
-
-Install PyTorch for your CUDA version using extras:
 
 ```console
 uv sync --extra cu130  # CUDA 13.0
 uv sync --extra cu128  # CUDA 12.8
 ```
 
-## xFormers
-
-xFormers must match your PyTorch CUDA version. If you see a version mismatch warning (e.g. built for cu128 but you have cu130), build from source:
-
-```console
-pip install xformers --no-binary xformers
-```
-
-Note: `pyproject.toml` pins PyTorch to the `pytorch-cu130` index. If your system uses a different CUDA version, remove or update that index entry before installing.
-
 ## Flash Attention
 
-ModernBERT supports Flash Attention 2 for faster training and lower VRAM usage. Enable with `--flash-attention`:
-
-Install a prebuilt wheel first:
+Enable with `--flash-attention`. Install a prebuilt wheel first:
 
 - **x86_64**: https://github.com/mjun0812/flash-attention-prebuild-wheels
 - **aarch64 (ARM)**: https://pypi.jetson-ai-lab.io/sbsa/cu130
 
 ```console
-./scripts/train_scratch.sh --flash-attention
-```
-
-Install a prebuilt wheel first:
-
-- **x86_64**: https://github.com/mjun0812/flash-attention-prebuild-wheels
-- **aarch64 (ARM)**: https://pypi.jetson-ai-lab.io/sbsa/cu130
-
-Validate:
-
-```console
-uv run python -c "import flash_attn; print(flash_attn.__version__)"
+./scripts/train.sh --flash-attention
 ```
 
 ## Learning Rates
@@ -92,4 +62,4 @@ uv run python -c "import flash_attn; print(flash_attn.__version__)"
 
 Input TSV: `hebrew_text<TAB>ipa_text` — one sentence per line, no header. Hebrew side may have nikud (diacritics are stripped automatically by the aligner).
 
-The aligner outputs JSONL where each line is `{"hebrew sentence": [["char", "ipa_chunk"], ...]}`. Failed alignments are saved to `<output>_failures.txt`.
+The aligner outputs JSONL where each line is `{"hebrew": "...", "alignment": [["char", "ipa_chunk"], ...]}`. Failed alignments are saved to `<output>_failures.txt`.

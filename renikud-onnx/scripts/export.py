@@ -18,11 +18,13 @@ os.environ["NEOBERT_ONNX_EXPORT"] = "1"
 import onnx
 import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
-from constants import CONSONANTS, VOWELS, TOKENIZER_PATH
+from transformers import AutoTokenizer
+
+from constants import CONSONANTS, VOWELS
+from encoder import HF_MODEL, TRUST_REMOTE_CODE
 from infer import load_checkpoint
 from model import G2PModel
 from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS, HEBREW_LETTER_CONSONANTS, LETTERS_WITH_GERESH
-from tokenization import load_tokenizer
 
 
 def main():
@@ -32,7 +34,7 @@ def main():
     parser.add_argument("--int8", action=argparse.BooleanOptionalAction, default=True, help="Quantize weights to INT8 (dynamic quantization, no calibration needed)")
     args = parser.parse_args()
 
-    tokenizer = load_tokenizer(TOKENIZER_PATH)
+    tokenizer = AutoTokenizer.from_pretrained(HF_MODEL, trust_remote_code=TRUST_REMOTE_CODE)
     vocab = tokenizer.get_vocab()  # {token: id}
     tokenizer_vocab = {v: k for k, v in vocab.items()}  # {id: token}
 

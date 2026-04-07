@@ -11,10 +11,10 @@ from pathlib import Path
 
 import torch
 
-from constants import MAX_LEN, TOKENIZER_PATH
+from constants import MAX_LEN
 from decoder import build_tokenizer_vocab, decode
+from encoder import HF_MODEL, TRUST_REMOTE_CODE
 from model import G2PModel
-from tokenization import load_tokenizer
 
 
 def parse_args():
@@ -73,7 +73,8 @@ def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = load_tokenizer(TOKENIZER_PATH)
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(HF_MODEL, trust_remote_code=TRUST_REMOTE_CODE)
     model = G2PModel()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()

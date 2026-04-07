@@ -15,9 +15,11 @@ from pathlib import Path
 import torch
 import jiwer
 from tqdm import tqdm
+from transformers import AutoTokenizer
+
+from encoder import HF_MODEL, TRUST_REMOTE_CODE
 from model import G2PModel
 from infer import load_checkpoint, phonemize
-from tokenization import load_tokenizer
 from constants import MAX_LEN
 
 PUNCT = str.maketrans("", "", ".,?!")
@@ -45,7 +47,7 @@ def main():
         return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = load_tokenizer(Path(__file__).parent.parent / "src" / "tokenizer.json")
+    tokenizer = AutoTokenizer.from_pretrained(HF_MODEL, trust_remote_code=TRUST_REMOTE_CODE)
     model = G2PModel()
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
