@@ -161,7 +161,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fast Arrow dataset preparation")
     parser.add_argument("input", help="Input JSONL file")
     parser.add_argument("output", help="Output Arrow directory")
-    parser.add_argument("--workers", type=int, default=os.cpu_count())
+    parser.add_argument("--workers", type=int, default=min(64, os.cpu_count()))
     parser.add_argument("--batch_size", type=int, default=1000)
     args = parser.parse_args()
 
