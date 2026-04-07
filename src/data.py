@@ -15,11 +15,12 @@ class ClassifierDataCollator:
     pad_id: int = 0
     ignore_id: int = IGNORE_INDEX
 
-    def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
+    def __call__(self, features: list[dict]) -> dict:
         max_len = max(len(f["input_ids"]) for f in features)
 
         input_ids, attention_mask = [], []
         consonant_labels, vowel_labels, stress_labels = [], [], []
+        texts, phonemes = [], []
 
         for f in features:
             pad = max_len - len(f["input_ids"])
@@ -28,6 +29,8 @@ class ClassifierDataCollator:
             consonant_labels.append(list(f["consonant_labels"]) + [self.ignore_id] * pad)
             vowel_labels.append(list(f["vowel_labels"]) + [self.ignore_id] * pad)
             stress_labels.append(list(f["stress_labels"]) + [self.ignore_id] * pad)
+            texts.append(f["hebrew"])
+            phonemes.append(f["phonemes"])
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
@@ -35,6 +38,8 @@ class ClassifierDataCollator:
             "consonant_labels": torch.tensor(consonant_labels, dtype=torch.long),
             "vowel_labels": torch.tensor(vowel_labels, dtype=torch.long),
             "stress_labels": torch.tensor(stress_labels, dtype=torch.long),
+            "texts": texts,
+            "phonemes": phonemes,
         }
 
 

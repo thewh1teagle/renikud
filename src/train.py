@@ -18,17 +18,16 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-import torch
-import wandb
+from torch.utils.tensorboard import SummaryWriter
 from accelerate import Accelerator
 from tqdm import tqdm
 
-from checkpoint import save_checkpoint
+from checkpoint import resume_step, save_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
 from model import G2PModel
-from optimizer import cosine_lr_lambda, parameter_groups
+from optimizer import build_optimizer, build_scheduler
 
 
 def main():
@@ -39,19 +38,22 @@ def main():
     accelerator = Accelerator(mixed_precision="fp16" if args.fp16 else "no")
     device = accelerator.device
 
-    if accelerator.is_main_process:
-        wandb.init(project="hebrew-g2p-classifier", config=vars(args), mode=args.wandb_mode)
+    writer = SummaryWriter(log_dir=str(output_dir / "tensorboard")) if accelerator.is_main_process else None
+
+    from tokenization import load_tokenizer
+    from constants import TOKENIZER_PATH
+    tokenizer = load_tokenizer(TOKENIZER_PATH)
 
     train_loader, eval_loader = make_dataloaders(args)
 
     model = G2PModel(flash_attention=args.flash_attention)
 
-    if args.init_from_checkpoint:
+    if args.resume:
         from safetensors.torch import load_file
-        state = load_file(str(Path(args.init_from_checkpoint) / "model.safetensors"), device="cpu")
+        state = load_file(str(Path(args.resume) / "model.safetensors"), device="cpu")
         model.load_state_dict(state, strict=False)
         if accelerator.is_main_process:
-            print(f"Loaded weights from {args.init_from_checkpoint}")
+            print(f"Loaded weights from {args.resume}")
 
     if args.freeze_encoder_steps > 0:
         for p in model.encoder.parameters():
@@ -59,33 +61,19 @@ def main():
         if accelerator.is_main_process:
             print("Encoder frozen.")
 
-    optimizer = torch.optim.AdamW(
-        parameter_groups(model, args.encoder_lr, args.head_lr, args.weight_decay)
-    )
-
     total_opt_steps = math.ceil(len(train_loader) * args.epochs / args.gradient_accumulation_steps)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer,
-        lr_lambda=lambda step: cosine_lr_lambda(step, args.warmup_steps, total_opt_steps),
-    )
+    optimizer = build_optimizer(model, args.encoder_lr, args.head_lr, args.weight_decay)
+    scheduler = build_scheduler(optimizer, args.warmup_steps, total_opt_steps)
 
     model, optimizer, train_loader, eval_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, eval_loader, scheduler
     )
 
-    # Restore step counter when resuming (skipped when --init-weights-only)
     opt_step = 0
-    if args.init_from_checkpoint and not args.init_weights_only:
-        import json
-        state_path = Path(args.init_from_checkpoint) / "train_state.json"
-        if state_path.exists():
-            saved = json.loads(state_path.read_text())
-            opt_step = saved["step"]
-            # Fast-forward scheduler to correct LR
-            for _ in range(opt_step):
-                scheduler.step()
-            if accelerator.is_main_process:
-                print(f"Resumed from step {opt_step}")
+    if args.resume and not args.reset_steps:
+        opt_step = resume_step(args.resume, scheduler)
+        if accelerator.is_main_process:
+            print(f"Resumed from step {opt_step}")
 
     global_step = opt_step * args.gradient_accumulation_steps
     optimizer.zero_grad()
@@ -105,6 +93,8 @@ def main():
                 if accelerator.is_main_process:
                     print(f"\n[step {opt_step}] Encoder unfrozen.")
 
+            batch.pop("texts")
+            batch.pop("phonemes")
             with accelerator.autocast():
                 out = model(**batch)
 
@@ -132,25 +122,34 @@ def main():
                 if accelerator.is_main_process:
                     if opt_step % args.logging_steps == 0:
                         print(f"[step {opt_step}] train_loss={train_loss:.4f} lr_encoder={optimizer.param_groups[0]['lr']:.2e} lr_head={optimizer.param_groups[2]['lr']:.2e}")
-                        wandb.log({
-                            "train_loss": train_loss,
-                            "lr_encoder": optimizer.param_groups[0]["lr"],
-                            "lr_head": optimizer.param_groups[2]["lr"],
-                            "epoch": epoch,
-                        }, step=opt_step)
+                        writer.add_scalar("train/loss", train_loss, opt_step)
+                        writer.add_scalar("train/lr_encoder", optimizer.param_groups[0]["lr"], opt_step)
+                        writer.add_scalar("train/lr_head", optimizer.param_groups[2]["lr"], opt_step)
 
                     if opt_step % args.save_steps == 0:
-                        metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16)
-                        wandb.log(metrics, step=opt_step)
-                        print(f"[step {opt_step}] consonant_acc={metrics['consonant_acc']:.4f} vowel_acc={metrics['vowel_acc']:.4f} stress_acc={metrics['stress_acc']:.4f} eval_loss={metrics['eval_loss']:.4f}")
-                        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+                        metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
+                        print(f"[step {opt_step}] loss={metrics['eval_loss']:.4f} consonant={metrics['consonant_acc']:.1%} vowel={metrics['vowel_acc']:.1%} stress={metrics['stress_acc']:.1%} char_acc={1-metrics['cer']:.1%} word_acc={1-metrics['wer']:.1%}")
+                        writer.add_scalar("eval/loss", metrics["eval_loss"], opt_step)
+                        writer.add_scalar("eval/consonant_acc", metrics["consonant_acc"], opt_step)
+                        writer.add_scalar("eval/vowel_acc", metrics["vowel_acc"], opt_step)
+                        writer.add_scalar("eval/stress_acc", metrics["stress_acc"], opt_step)
+                        writer.add_scalar("eval/mean_acc", metrics["mean_acc"], opt_step)
+                        writer.add_scalar("eval/char_acc", 1 - metrics["cer"], opt_step)
+                        writer.add_scalar("eval/word_acc", 1 - metrics["wer"], opt_step)
+                        save_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
 
     if accelerator.is_main_process:
-        metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16)
-        wandb.log(metrics)
-        print(f"Final: consonant_acc={metrics['consonant_acc']:.4f} vowel_acc={metrics['vowel_acc']:.4f} stress_acc={metrics['stress_acc']:.4f}")
-        save_checkpoint(accelerator.unwrap_model(model), output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
-        wandb.finish()
+        metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
+        print(f"Final: loss={metrics['eval_loss']:.4f} consonant={metrics['consonant_acc']:.1%} vowel={metrics['vowel_acc']:.1%} stress={metrics['stress_acc']:.1%} char_acc={1-metrics['cer']:.1%} word_acc={1-metrics['wer']:.1%}")
+        writer.add_scalar("eval/loss", metrics["eval_loss"], opt_step)
+        writer.add_scalar("eval/consonant_acc", metrics["consonant_acc"], opt_step)
+        writer.add_scalar("eval/vowel_acc", metrics["vowel_acc"], opt_step)
+        writer.add_scalar("eval/stress_acc", metrics["stress_acc"], opt_step)
+        writer.add_scalar("eval/mean_acc", metrics["mean_acc"], opt_step)
+        writer.add_scalar("eval/cer", metrics["cer"], opt_step)
+        writer.add_scalar("eval/wer", metrics["wer"], opt_step)
+        save_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+        writer.close()
 
 
 if __name__ == "__main__":
