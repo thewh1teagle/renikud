@@ -18,9 +18,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Ensure CUDA-enabled PyTorch is installed. Change to --extra cu128 if needed.
-uv sync --extra cu130
-
 uv run accelerate launch src/train.py \
   --train-dataset dataset/.cache/train \
   --eval-dataset dataset/.cache/val \
