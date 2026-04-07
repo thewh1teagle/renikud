@@ -1,20 +1,13 @@
 """
-Prepare tokenized Arrow dataset from aligned JSONL for classifier training.
-
-Reads train_alignment.jsonl produced by data_align.py and produces an Arrow
-dataset with per-character consonant, vowel, and stress labels aligned to
-BERT token positions.
-
-Usage:
-    uv run src/data_tokenize.py dataset/train_alignment.jsonl dataset/.cache/train
-    uv run src/data_tokenize.py dataset/val_alignment.jsonl dataset/.cache/val
+Optimized Tokenized Arrow dataset preparation.
+Uses HF Datasets .map() with multi-processing to handle 5M+ sentences.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import multiprocessing as mp
+import os
 from pathlib import Path
 
 import datasets
@@ -27,60 +20,26 @@ from constants import (
     STRESS_NONE,
     IGNORE_INDEX,
     is_hebrew_letter,
+    TOKENIZER_PATH,
 )
-from constants import TOKENIZER_PATH
 from tokenization import load_tokenizer
 
 STRESS_MARK = "ˈ"
 VOWELS_SET = set("aeiou")
 
+# Global tokenizer for worker processes
 _worker_tokenizer = None
 
-
-def _init_worker():
-    global _worker_tokenizer
-    _worker_tokenizer = load_tokenizer(TOKENIZER_PATH)
-
-
-def process_chunk(lines: list[str]) -> tuple[list[dict], int]:
-    records = []
-    skipped = 0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        obj = json.loads(line)
-        hebrew, alignment = next(iter(obj.items()))
-        record = process_sentence(hebrew, alignment, _worker_tokenizer)
-        if record is None:
-            skipped += 1
-        else:
-            records.append(record)
-    return records, skipped
-
-
 def parse_ipa_chunk(chunk: str) -> tuple[str, str, int]:
-    """
-    Parse an IPA chunk into (consonant, vowel, stress).
-
-    Chunk format: [ˈ][consonant][vowel]  e.g. "ʃa", "lˈo", "∅", "ˈa", "bi"
-    Returns (consonant_str, vowel_str, stress_int) where:
-      - consonant_str is the consonant or "∅" if silent/none
-      - vowel_str is the vowel or "∅" if none
-      - stress_int is STRESS_YES or STRESS_NONE
-    """
     if not chunk or chunk == " ":
         return ("∅", "∅", STRESS_NONE)
 
     pos = 0
     stress = STRESS_NONE
-
-    # Stress mark comes before the vowel in the chunk
     if STRESS_MARK in chunk:
         stress = STRESS_YES
         chunk = chunk.replace(STRESS_MARK, "")
 
-    # Try to match known multi-char consonants first (ts, tʃ, dʒ)
     consonant = "∅"
     for multi in ("tʃ", "dʒ", "ts"):
         if chunk.startswith(multi):
@@ -88,127 +47,136 @@ def parse_ipa_chunk(chunk: str) -> tuple[str, str, int]:
             pos = len(multi)
             break
     else:
-        # Single char consonant or vowel-only
         if pos < len(chunk) and chunk[pos] not in VOWELS_SET:
             consonant = chunk[pos]
             pos += 1
 
-    # Remaining is the vowel
     vowel = chunk[pos:] if pos < len(chunk) else "∅"
     if not vowel:
         vowel = "∅"
 
-    # Furtive patah: word-final ח is encoded as [vowel]χ (reversed order).
-    # Detect this by checking if the "vowel" ends with χ — extract the real vowel.
     if vowel.endswith("χ"):
         consonant = "χ"
         vowel = vowel[:-1] or "∅"
 
-    # Validate — fall back to ∅ if unknown
-    if consonant not in CONSONANT_TO_ID:
-        consonant = "∅"
-    if vowel not in VOWEL_TO_ID:
-        vowel = "∅"
+    return (
+        consonant if consonant in CONSONANT_TO_ID else "∅",
+        vowel if vowel in VOWEL_TO_ID else "∅",
+        stress
+    )
 
-    return (consonant, vowel, stress)
-
-
-def process_sentence(
-    hebrew: str,
-    alignment: list[list[str]],
-    tokenizer,
-) -> dict | None:
+def parse_json_line(example):
     """
-    Tokenize the Hebrew sentence and align per-character labels to token positions.
-    Returns None if tokenization produces unexpected token count.
+    Step 1: Convert raw text line to structured Hebrew and Alignment columns.
+    Bypasses schema mismatch issues with dynamic JSON keys.
     """
-    encoding = tokenizer(
-        hebrew,
+    try:
+        obj = json.loads(example["text"])
+        hebrew, alignment = next(iter(obj.items()))
+        return {"hebrew": hebrew, "alignment": alignment, "valid": True}
+    except Exception:
+        return {"hebrew": "", "alignment": [], "valid": False}
+
+def process_batch(batch):
+    """
+    Step 2: Tokenize and align labels in batches.
+    """
+    global _worker_tokenizer
+    if _worker_tokenizer is None:
+        # Crucial: Ensure your load_tokenizer uses use_fast=True
+        _worker_tokenizer = load_tokenizer(TOKENIZER_PATH)
+
+    hebrew_sentences = batch["hebrew"]
+    alignments = batch["alignment"]
+
+    encodings = _worker_tokenizer(
+        hebrew_sentences,
         truncation=True,
         max_length=512,
         return_offsets_mapping=True,
-        return_tensors=None,
     )
 
-    input_ids = encoding["input_ids"]
-    attention_mask = encoding["attention_mask"]
-    offset_mapping = encoding["offset_mapping"]
+    batch_consonant_labels = []
+    batch_vowel_labels = []
+    batch_stress_labels = []
 
-    seq_len = len(input_ids)
-    consonant_labels = [IGNORE_INDEX] * seq_len
-    vowel_labels = [IGNORE_INDEX] * seq_len
-    stress_labels = [IGNORE_INDEX] * seq_len
+    for i in range(len(hebrew_sentences)):
+        hebrew = hebrew_sentences[i]
+        alignment = alignments[i]
+        offsets = encodings["offset_mapping"][i]
+        seq_len = len(encodings["input_ids"][i])
 
-    # Build char_index -> (consonant, vowel, stress) from alignment.
-    # The alignment pairs only contain Hebrew letters and spaces (punctuation,
-    # digits, Latin chars were stripped by the aligner), so we walk the original
-    # sentence to get correct offsets for the tokenizer's offset_mapping.
-    char_labels: dict[int, tuple[str, str, int]] = {}
-    align_iter = iter(alignment)
-    for char_pos, orig_char in enumerate(hebrew):
-        if not is_hebrew_letter(orig_char) and orig_char != " ":
-            continue  # punctuation/digit/Latin — not in alignment, skip
-        try:
-            align_char, chunk = next(align_iter)
-        except StopIteration:
-            break
-        if is_hebrew_letter(orig_char):
-            char_labels[char_pos] = parse_ipa_chunk(chunk)
+        c_labels = [IGNORE_INDEX] * seq_len
+        v_labels = [IGNORE_INDEX] * seq_len
+        s_labels = [IGNORE_INDEX] * seq_len
 
-    # Map token positions to char positions using offset_mapping
-    for tok_idx, (start, end) in enumerate(offset_mapping):
-        if end - start != 1:
-            # CLS, SEP, or multi-char token — ignore
-            continue
-        char_idx = start
-        if char_idx in char_labels:
-            consonant, vowel, stress = char_labels[char_idx]
-            consonant_labels[tok_idx] = CONSONANT_TO_ID.get(consonant, IGNORE_INDEX)
-            vowel_labels[tok_idx] = VOWEL_TO_ID.get(vowel, IGNORE_INDEX)
-            stress_labels[tok_idx] = stress
-        elif not is_hebrew_letter(hebrew[char_idx]) and hebrew[char_idx] != " ":
-            # Non-Hebrew, non-space char (e.g. apostrophe in ג'/צ'/ז') — train model to emit nothing
-            consonant_labels[tok_idx] = CONSONANT_TO_ID["∅"]
-            vowel_labels[tok_idx] = VOWEL_TO_ID["∅"]
-            stress_labels[tok_idx] = STRESS_NONE
+        # Map alignment to char positions
+        char_labels = {}
+        align_iter = iter(alignment)
+        for char_pos, orig_char in enumerate(hebrew):
+            if not is_hebrew_letter(orig_char) and orig_char != " ":
+                continue
+            try:
+                _, chunk = next(align_iter)
+            except StopIteration:
+                break
+            if is_hebrew_letter(orig_char):
+                char_labels[char_pos] = parse_ipa_chunk(chunk)
+
+        # Align tokens to labels
+        for tok_idx, (start, end) in enumerate(offsets):
+            # Skip special tokens or multi-char subwords
+            if end - start != 1:
+                continue
+            
+            char_idx = start
+            if char_idx in char_labels:
+                c, v, s = char_labels[char_idx]
+                c_labels[tok_idx] = CONSONANT_TO_ID.get(c, IGNORE_INDEX)
+                v_labels[tok_idx] = VOWEL_TO_ID.get(v, IGNORE_INDEX)
+                s_labels[tok_idx] = s
+            elif char_idx < len(hebrew) and not is_hebrew_letter(hebrew[char_idx]) and hebrew[char_idx] != " ":
+                c_labels[tok_idx] = CONSONANT_TO_ID["∅"]
+                v_labels[tok_idx] = VOWEL_TO_ID["∅"]
+                s_labels[tok_idx] = STRESS_NONE
+
+        batch_consonant_labels.append(c_labels)
+        batch_vowel_labels.append(v_labels)
+        batch_stress_labels.append(s_labels)
 
     return {
-        "input_ids": input_ids,
-        "attention_mask": attention_mask,
-        "consonant_labels": consonant_labels,
-        "vowel_labels": vowel_labels,
-        "stress_labels": stress_labels,
+        "input_ids": encodings["input_ids"],
+        "attention_mask": encodings["attention_mask"],
+        "consonant_labels": batch_consonant_labels,
+        "vowel_labels": batch_vowel_labels,
+        "stress_labels": batch_stress_labels,
     }
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Prepare classifier training tokens from aligned JSONL")
-    parser.add_argument("input", help="Input JSONL file (from data_align.py)")
-    parser.add_argument("output", help="Output Arrow dataset directory")
-    parser.add_argument("--workers", type=int, default=mp.cpu_count())
+    parser = argparse.ArgumentParser(description="Fast Arrow dataset preparation")
+    parser.add_argument("input", help="Input JSONL file")
+    parser.add_argument("output", help="Output Arrow directory")
+    parser.add_argument("--workers", type=int, default=os.cpu_count())
+    parser.add_argument("--batch_size", type=int, default=1000)
     args = parser.parse_args()
 
-    with open(args.input, encoding="utf-8") as f:
-        lines = f.readlines()
+    print(f"Reading {args.input}...")
+    ds = datasets.load_dataset("json", data_files=args.input, split="train")
 
-    chunk_size = max(1, len(lines) // (args.workers * 4))
-    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+    # Tokenize and align
+    tokenized_ds = ds.map(
+        process_batch,
+        batched=True,
+        batch_size=args.batch_size,
+        num_proc=args.workers,
+        remove_columns=["hebrew", "alignment"],
+        desc="Tokenizing"
+    )
 
-    all_records = []
-    total_skipped = 0
-
-    with mp.Pool(args.workers, initializer=_init_worker) as pool:
-        for records, skipped in tqdm(pool.imap(process_chunk, chunks), total=len(chunks), desc="Tokenizing"):
-            all_records.extend(records)
-            total_skipped += skipped
-
-    print(f"\nProcessed: {len(all_records):,}")
-    print(f"Skipped:   {total_skipped:,}")
-
-    dataset = datasets.Dataset.from_list(all_records)
-    dataset.save_to_disk(args.output)
-    print(f"Saved to:  {args.output}")
-
+    # 4. Save to Disk
+    print(f"Saving to {args.output}...")
+    tokenized_ds.save_to_disk(args.output)
+    print("Done.")
 
 if __name__ == "__main__":
     main()
