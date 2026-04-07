@@ -8,62 +8,14 @@ import unicodedata
 
 from tqdm import tqdm
 
-from phonology import HEBREW_LETTER_CONSONANTS as HEBREW_CONSONANTS
+from aligner.align import align_word
 
-VOWELS = ("a", "e", "i", "o", "u")
-STRESS = "ˈ"
 HEB_RE = r"[^\u05d0-\u05ea]"
 IPA_RE = r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]"
 
 
 def strip_nikud(text: str) -> str:
     return re.sub(r"[\p{M}|]", "", unicodedata.normalize("NFD", text))
-
-
-def _chunk_pattern(char: str) -> str:
-    """Regex capture group for the IPA chunk a single Hebrew letter produces."""
-    allowed = HEBREW_CONSONANTS.get(char, ("",))
-    cons_alts = sorted([re.escape(c) for c in allowed if c], key=len, reverse=True)
-    has_silent = "" in allowed
-
-    vowel_re = f"ˈ?(?:{'|'.join(VOWELS)})?"
-
-    patterns = []
-
-    if cons_alts:
-        cons_re = "|".join(cons_alts)
-        cons_re = f"(?:{cons_re})" if len(cons_alts) > 1 else cons_alts[0]
-        patterns.append(f"{cons_re}{vowel_re}")
-
-    if char == "ו":
-        patterns.append(r"ˈ?(?:u|o)")
-    if char == "י":
-        patterns.append(r"ˈ?i")
-
-    if char == "ח":
-        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})?χ")
-
-    if has_silent:
-        patterns.append(f"ˈ?(?:{'|'.join(VOWELS)})|ˈ|")
-
-    combined = "|".join(f"(?:{p})" for p in patterns if p)
-    if has_silent or char in ("ו", "י"):
-        combined += "|"
-    return f"({combined})"
-
-
-_LETTER_PATTERNS: dict[str, str] = {
-    char: _chunk_pattern(char) for char in HEBREW_CONSONANTS
-}
-
-
-def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
-    """Align one Hebrew word to one IPA word."""
-    pattern = "".join(_LETTER_PATTERNS.get(c, r"(\S*)") for c in heb_word)
-    m = re.fullmatch(pattern, ipa_word)
-    if m is None:
-        return None
-    return list(zip(heb_word, m.groups()))
 
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
