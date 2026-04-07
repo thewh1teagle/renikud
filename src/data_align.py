@@ -9,13 +9,15 @@ from tqdm import tqdm
 from aligner.align import align_word
 
 # Compiled regex is faster
-HEB_RE = re.compile(r"[^\u05d0-\u05ea]")
+HEB_RE = re.compile(r"[^\u05d0-\u05ea']")
 IPA_RE = re.compile(r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]")
 NIKUD_RE = re.compile(r"[\p{M}|]")
 
-def strip_nikud(text: str) -> str:
-    # Use NFD normalization only once per line
-    return NIKUD_RE.sub("", unicodedata.normalize("NFD", text))
+def normalize(text: str) -> str:
+    text = NIKUD_RE.sub("", unicodedata.normalize("NFD", text))
+    # Normalize all geresh variants to ASCII apostrophe
+    text = re.sub(r"[׳'`´]", "'", text)
+    return text
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
     heb_words, ipa_words = heb.split(), ipa.split()
@@ -44,7 +46,7 @@ def process_line(line: str) -> str | tuple[str, str]:
     if not sep:
         return "FAIL_EMPTY"
     
-    heb = strip_nikud(heb_raw)
+    heb = normalize(heb_raw)
     result = align_sentence(heb, ipa)
     
     if result is not None:
