@@ -49,6 +49,6 @@ raw TSV (hebrew<TAB>ipa)
   → train.py           training loop
 ```
 
-The DP aligner in `data_align.py` is constrained by `HEBREW_CONSONANTS` — only phonetically valid chunks are considered for each letter, which dramatically prunes the search space and prevents invalid alignments.
+The aligner (`src/aligner/align.py`) uses constrained recursive search with memoization to assign one IPA chunk per Hebrew letter. Each letter can only match consonants from its `HEBREW_LETTER_CONSONANTS` entry, which prunes the search space and prevents invalid alignments. `data_align.py` parallelizes this across sentences.
 
 Label alignment uses `offset_mapping`: only single-character token positions (offset `end - start == 1`) that correspond to Hebrew letters receive labels. CLS, SEP, spaces, and punctuation get `IGNORE_INDEX = -100`.
