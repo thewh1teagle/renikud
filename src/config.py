@@ -32,6 +32,7 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=torch.cuda.is_available(),
     )
+    parser.add_argument("--save-epochs", action="store_true", default=False, help="Save a checkpoint at the end of each epoch (never pruned)")
     parser.add_argument("--flash-attention", action="store_true", default=False)
     parser.add_argument("--dataloader-workers", type=int, default=0)
     return parser.parse_args()

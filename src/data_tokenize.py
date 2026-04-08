@@ -144,17 +144,13 @@ def process_batch(batch):
         batch_vowel_labels.append(v_labels)
         batch_stress_labels.append(s_labels)
 
-    phonemes_list = []
-    for alignment in alignments:
-        phonemes_list.append("".join(chunk for _, chunk in alignment))
-
     return {
         "input_ids": encodings["input_ids"],
         "attention_mask": encodings["attention_mask"],
         "consonant_labels": batch_consonant_labels,
         "vowel_labels": batch_vowel_labels,
         "stress_labels": batch_stress_labels,
-        "phonemes": phonemes_list,
+        "phonemes": batch["phonemes"],
     }
 
 def main():

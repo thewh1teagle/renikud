@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from accelerate import Accelerator
 from tqdm import tqdm
 
-from checkpoint import resume_step, save_checkpoint
+from checkpoint import resume_step, save_checkpoint, save_epoch_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
@@ -137,6 +137,11 @@ def main():
                         writer.add_scalar("eval/char_acc", 1 - metrics["cer"], opt_step)
                         writer.add_scalar("eval/word_acc", 1 - metrics["wer"], opt_step)
                         save_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+
+        if args.save_epochs and accelerator.is_main_process:
+            metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
+            print(f"[epoch {epoch + 1}] loss={metrics['eval_loss']:.4f} consonant={metrics['consonant_acc']:.1%} vowel={metrics['vowel_acc']:.1%} stress={metrics['stress_acc']:.1%} char_acc={1-metrics['cer']:.1%} word_acc={1-metrics['wer']:.1%}")
+            save_epoch_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, epoch + 1, opt_step, metrics["mean_acc"])
 
     if accelerator.is_main_process:
         metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)

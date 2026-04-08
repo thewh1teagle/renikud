@@ -51,7 +51,7 @@ def process_line(line: str) -> str | tuple[str, str]:
     
     if result is not None:
         # Return serialized JSON directly to avoid pickling complex objects
-        return ("SUCCESS", json.dumps({"hebrew": heb, "alignment": result}, ensure_ascii=False))
+        return ("SUCCESS", json.dumps({"hebrew": heb, "alignment": result, "phonemes": ipa}, ensure_ascii=False))
     else:
         return ("FAIL", f"{heb}\t{ipa}")
 
