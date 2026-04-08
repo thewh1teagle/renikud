@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "gradio>=5.0.0",
-#   "renikud-onnx @ git+https://github.com/thewh1teagle/renikud-v5.git#subdirectory=renikud-onnx",
+#   "renikud-onnx @ git+https://github.com/thewh1teagle/renikud.git#subdirectory=renikud-onnx",
 #   "numpy>=1.26.0",
 #   "phonemizer-fork>=3.3.2",
 #   "espeakng-loader>=0.1.9",
