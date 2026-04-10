@@ -17,6 +17,7 @@ from constants import (
     CONSONANT_TO_ID,
     VOWEL_TO_ID,
     IGNORE_INDEX,
+    STRESS_NONE,
 )
 from phonology import is_hebrew_letter, chunk_to_labels
 from tokenization import load_tokenizer
