@@ -137,13 +137,13 @@ def main():
                         writer.add_scalar("eval/char_acc", 1 - metrics["cer"], opt_step)
                         writer.add_scalar("eval/word_acc", 1 - metrics["wer"], opt_step)
                         save_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
+                        if args.save_best and save_best_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, metrics["wer"], None, opt_step):
+                            print(f"[step {opt_step}] New best WER={metrics['wer']:.4f} → saved to {output_dir}/best")
 
         if args.save_epochs and accelerator.is_main_process:
             metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
             print(f"[epoch {epoch + 1}] loss={metrics['eval_loss']:.4f} consonant={metrics['consonant_acc']:.1%} vowel={metrics['vowel_acc']:.1%} stress={metrics['stress_acc']:.1%} char_acc={1-metrics['cer']:.1%} word_acc={1-metrics['wer']:.1%}")
             save_epoch_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, epoch + 1, opt_step, metrics["mean_acc"])
-            if args.save_best and save_best_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, metrics["wer"], epoch + 1, opt_step):
-                print(f"[epoch {epoch + 1}] New best WER={metrics['wer']:.4f} → saved to {output_dir}/best")
 
     if accelerator.is_main_process:
         metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
