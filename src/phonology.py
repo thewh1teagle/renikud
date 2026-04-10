@@ -24,7 +24,7 @@ from aligner.align import HEBREW_LETTER_CONSONANTS
 # ---------------------------------------------------------------------------
 ORTHOGRAPHIC_MARKERS: Final[tuple[str, ...]] = ("'", '"')
 
-def normalize_orthography(text: str) -> str:
+def normalize_graphemes(text: str) -> str:
     """Consistently normalizes Geresh and Gershayim variants to strict ASCII."""
     text = re.sub(r"[׳'`´]", "'", text)
     text = re.sub(r"[״”“]", '"', text)

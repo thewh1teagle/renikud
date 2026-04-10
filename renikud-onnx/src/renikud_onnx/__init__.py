@@ -19,6 +19,12 @@ def _is_hebrew(char: str) -> bool:
     return ALEF_ORD <= ord(char) <= TAF_ORD
 
 
+def normalize_graphemes(text: str) -> str:
+    text = re.sub(r"[׳'`´]", "'", text)
+    text = re.sub(r'[״""]', '"', text)
+    return text
+
+
 class G2P:
     def __init__(self, model_path: str) -> None:
         self._session = ort.InferenceSession(model_path)
@@ -64,8 +70,7 @@ class G2P:
         return stressed
 
     def phonemize(self, text: str) -> str:
-        text = re.sub(r"[׳'`´]", "'", text)
-        text = re.sub(r"[״”“]", '"', text)
+        text = normalize_graphemes(text)
         normalized = unicodedata.normalize("NFD", text)
         ids, mask, offsets = self._tokenize(text)
 

@@ -1,7 +1,13 @@
 import csv
+import re
 from pathlib import Path
 import pytest
 from align import align_word
+
+def normalize_graphemes(text: str) -> str:
+    text = re.sub(r"[׳'`´]", "'", text)
+    text = re.sub(r'[״""]', '"', text)
+    return text
 
 GOLDEN_DIR = Path(__file__).parent / "testdata"
 SILENT_MARKER = "_"
@@ -29,7 +35,7 @@ def read_golden_files() -> list[tuple[str, str, str]]:
         with open(filepath, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f, delimiter="\t")
             for row in reader:
-                heb = row["hebrew"].strip()
+                heb = normalize_graphemes(row["hebrew"].strip())
                 aligned_ipa = row["aligned_ipa"].strip()
                 if heb and aligned_ipa:
                     # Normalize both the full IPA and the chunks in the TSV

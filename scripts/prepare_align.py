@@ -11,7 +11,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from aligner.align import align_word
 
-from phonology import ORTHOGRAPHIC_MARKERS, normalize_orthography
+from phonology import ORTHOGRAPHIC_MARKERS, normalize_graphemes
 
 # Compiled regex is faster
 MARKERS = "".join(ORTHOGRAPHIC_MARKERS)
@@ -21,7 +21,7 @@ NIKUD_RE = re.compile(r"[\p{M}|]")
 
 def normalize(text: str) -> str:
     text = NIKUD_RE.sub("", unicodedata.normalize("NFD", text))
-    text = normalize_orthography(text)
+    text = normalize_graphemes(text)
     # Treat hyphens as word boundaries
     text = text.replace("-", " ")
     return text

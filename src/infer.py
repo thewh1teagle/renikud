@@ -15,7 +15,7 @@ from safetensors.torch import load_file
 from constants import MAX_LEN
 from decoder import decode
 from model import G2PModel
-from phonology import normalize_orthography
+from phonology import normalize_graphemes
 from tokenization import load_tokenizer, id_to_token
 
 
@@ -34,7 +34,7 @@ def load_checkpoint(model: G2PModel, checkpoint_dir: str) -> None:
 
 def phonemize(text: str, model: G2PModel, tokenizer, device: torch.device, max_len: int) -> str:
     """Convert unvocalized Hebrew text to IPA using the classifier model."""
-    text = normalize_orthography(text)
+    text = normalize_graphemes(text)
 
     encoding = tokenizer(
         text,
