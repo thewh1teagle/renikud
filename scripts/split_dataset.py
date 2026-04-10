@@ -12,6 +12,12 @@ from pathlib import Path
 from tqdm import tqdm
 
 
+def write_split(path: Path, data: list[str], label: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for line in tqdm(data, desc=label, unit="lines"):
+            f.write(line + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
@@ -21,17 +27,20 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    print('Splitting dataset...')
-    lines = args.input.read_text(encoding="utf-8").splitlines()
+    total = sum(1 for _ in args.input.open(encoding="utf-8"))
+
+    with open(args.input, encoding="utf-8") as f:
+        lines = [l.rstrip("\n") for l in tqdm(f, total=total, desc="Reading", unit="lines") if l.strip()]
+
     random.seed(args.seed)
     random.shuffle(lines)
 
-    val_size = min(args.val_max, len(lines))
+    val_size = min(args.val_max, len(lines) // 2)
     train_lines = lines[val_size:]
     val_lines = lines[:val_size]
 
-    for path, data in tqdm([(args.train, train_lines), (args.val, val_lines)], desc="Writing"):
-        path.write_text("\n".join(data) + "\n", encoding="utf-8")
+    write_split(args.train, train_lines, "Writing train")
+    write_split(args.val, val_lines, "Writing val")
 
     print(f"Total: {len(lines)} | Train: {len(train_lines)} | Val: {len(val_lines)}")
 
