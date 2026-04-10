@@ -1,6 +1,6 @@
 # renikud
 
-Hebrew grapheme-to-phoneme (G2P) training project for converting unvocalized Hebrew text into IPA.
+Hebrew grapheme-to-phoneme (G2P) model that converts unvocalized text to IPA.
 
 🤗 Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
 
