@@ -19,6 +19,22 @@ def save_checkpoint(model, tokenizer, output_dir: Path, step: int, acc: float, s
         shutil.rmtree(checkpoints.pop(0))
 
 
+def save_best_checkpoint(model, tokenizer, output_dir: Path, wer: float, epoch: int, step: int) -> bool:
+    """Save to output_dir/best/ if wer improves. Returns True if saved."""
+    from safetensors.torch import save_file
+    best_dir = output_dir / "best"
+    marker = best_dir / "train_state.json"
+    if marker.exists():
+        prev = json.loads(marker.read_text())
+        if wer >= prev.get("wer", float("inf")):
+            return False
+    best_dir.mkdir(parents=True, exist_ok=True)
+    save_file(model.state_dict(), str(best_dir / "model.safetensors"))
+    tokenizer.save_pretrained(str(best_dir))
+    marker.write_text(json.dumps({"step": step, "epoch": epoch, "wer": wer}))
+    return True
+
+
 def save_epoch_checkpoint(model, tokenizer, output_dir: Path, epoch: int, step: int, acc: float) -> None:
     from safetensors.torch import save_file
     ckpt_dir = output_dir / f"epoch-{epoch}"
