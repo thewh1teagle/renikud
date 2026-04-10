@@ -22,12 +22,15 @@ from torch.utils.tensorboard import SummaryWriter
 from accelerate import Accelerator
 from tqdm import tqdm
 
+from safetensors.torch import load_file
+
 from checkpoint import resume_step, save_checkpoint, save_epoch_checkpoint
 from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
 from model import G2PModel
 from optimizer import build_optimizer, build_scheduler
+from tokenization import load_tokenizer
 
 
 def main():
@@ -40,16 +43,13 @@ def main():
 
     writer = SummaryWriter(log_dir=str(output_dir / "tensorboard")) if accelerator.is_main_process else None
 
-    from tokenization import load_tokenizer
-    from constants import TOKENIZER_PATH
-    tokenizer = load_tokenizer(TOKENIZER_PATH)
+    tokenizer = load_tokenizer()
 
     train_loader, eval_loader = make_dataloaders(args)
 
     model = G2PModel(flash_attention=args.flash_attention)
 
     if args.resume:
-        from safetensors.torch import load_file
         state = load_file(str(Path(args.resume) / "model.safetensors"), device="cpu")
         model.load_state_dict(state, strict=False)
         if accelerator.is_main_process:

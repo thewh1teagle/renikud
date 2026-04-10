@@ -23,19 +23,19 @@
 ## Upload Checkpoint to HuggingFace
 
 ```console
-./scripts/upload_checkpoint.sh outputs/g2p-classifier/checkpoint-5000
+./scripts/ckpt_upload.sh outputs/g2p-classifier/checkpoint-5000
 ```
 
 ## Download Checkpoint
 
 ```console
-./scripts/download_checkpoint.sh                  # downloads to ./checkpoint
+./scripts/ckpt_download.sh                  # downloads to ./checkpoint
 ```
 
 To fine-tune from a downloaded checkpoint:
 
 ```console
-./scripts/download_checkpoint.sh checkpoint
+./scripts/ckpt_download.sh checkpoint
 ./scripts/train_finetune.sh checkpoint
 ```
 

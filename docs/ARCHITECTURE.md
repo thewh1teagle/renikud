@@ -44,11 +44,11 @@ Each character is its own token. The tokenizer is built deterministically from c
 
 ```
 raw TSV (hebrew<TAB>ipa)
-  → data_align.py      DP aligner: assigns one IPA chunk per Hebrew letter → JSONL
-  → data_tokenize.py   tokenize + map labels to token positions → Arrow dataset
+  → scripts/prepare_align.py   DP aligner: assigns one IPA chunk per Hebrew letter → JSONL
+  → scripts/prepare_tokens.py  tokenize + map labels to token positions → Arrow dataset
   → train.py           training loop
 ```
 
-The aligner (`src/aligner/align.py`) uses constrained recursive search with memoization to assign one IPA chunk per Hebrew letter. Each letter can only match consonants from its `HEBREW_LETTER_CONSONANTS` entry, which prunes the search space and prevents invalid alignments. `data_align.py` parallelizes this across sentences.
+The aligner (`src/aligner/align.py`) uses constrained recursive search with memoization to assign one IPA chunk per Hebrew letter. Each letter can only match consonants from its `HEBREW_LETTER_CONSONANTS` entry, which prunes the search space and prevents invalid alignments. `scripts/align.py` parallelizes this across sentences.
 
 Label alignment uses `offset_mapping`: only single-character token positions (offset `end - start == 1`) that correspond to Hebrew letters receive labels. CLS, SEP, spaces, and punctuation get `IGNORE_INDEX = -100`.

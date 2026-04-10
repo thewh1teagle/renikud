@@ -27,7 +27,7 @@ See `docs/TRAINING.md` for data preparation, training commands, upload/download,
 Export a checkpoint to ONNX:
 
 ```console
-./scripts/export_onnx.sh outputs/g2p-classifier/checkpoint-5000
+./scripts/ckpt_export.sh outputs/g2p-classifier/checkpoint-5000
 ```
 
 Then use the Python package:

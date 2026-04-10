@@ -18,8 +18,12 @@ from __future__ import annotations
 
 import torch
 
-from constants import CONSONANT_TO_ID, ALEF_ORD, TAF_ORD, NUM_CONSONANT_CLASSES, is_hebrew_letter
+from constants import CONSONANT_TO_ID, VOWEL_TO_ID, VOWELS, VOWEL_NONE, STRESS_YES, STRESS_NONE, STRESS_MARK, ALEF_ORD, TAF_ORD, NUM_CONSONANT_CLASSES
 from aligner.align import HEBREW_LETTER_CONSONANTS
+
+
+def is_hebrew_letter(char: str) -> bool:
+    return ALEF_ORD <= ord(char) <= TAF_ORD
 
 # ---------------------------------------------------------------------------
 # Letter whose word-final + vowel-a chunk reverses to [vowel]χ (furtive patah)
@@ -78,3 +82,44 @@ def apply_consonant_mask(
                 masked[b, s][mask[letter_idx]] = -1e9
 
     return masked
+
+
+_VOWELS_SET = set(VOWELS) - {VOWEL_NONE}
+
+
+def chunk_to_labels(chunk: str) -> tuple[str, str, int]:
+    """Parse an aligned IPA chunk into (consonant, vowel, stress) labels."""
+
+    if not chunk or chunk == " ":
+        return ("∅", "∅", STRESS_NONE)
+
+    pos = 0
+    stress = STRESS_NONE
+    if STRESS_MARK in chunk:
+        stress = STRESS_YES
+        chunk = chunk.replace(STRESS_MARK, "")
+
+    consonant = "∅"
+    for multi in ("tʃ", "dʒ", "ts"):
+        if chunk.startswith(multi):
+            consonant = multi
+            pos = len(multi)
+            break
+    else:
+        if pos < len(chunk) and chunk[pos] not in _VOWELS_SET:
+            consonant = chunk[pos]
+            pos += 1
+
+    vowel = chunk[pos:] if pos < len(chunk) else "∅"
+    if not vowel:
+        vowel = "∅"
+
+    if vowel.endswith("χ"):
+        consonant = "χ"
+        vowel = vowel[:-1] or "∅"
+
+    return (
+        consonant if consonant in CONSONANT_TO_ID else "∅",
+        vowel if vowel in VOWEL_TO_ID else "∅",
+        stress
+    )

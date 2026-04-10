@@ -1,9 +1,7 @@
 """Constants for the Hebrew G2P classifier model."""
 
-from pathlib import Path
 from typing import Final
 
-TOKENIZER_PATH: Final[Path] = Path(__file__).parent / "tokenizer.json"
 MAX_LEN: Final[int] = 256
 
 # ---------------------------------------------------------------------------
@@ -42,11 +40,6 @@ STRESS_MARK: Final[str] = "ˈ"
 # Hebrew Unicode range א-ת
 ALEF_ORD: Final[int] = ord("א")
 TAF_ORD: Final[int] = ord("ת")
-
-
-def is_hebrew_letter(char: str) -> bool:
-    return ALEF_ORD <= ord(char) <= TAF_ORD
-
 
 # Label ignore index — used for non-Hebrew positions (CLS, SEP, spaces, punct)
 IGNORE_INDEX: Final[int] = -100

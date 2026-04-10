@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import string
 import unicodedata
-from pathlib import Path
+from functools import lru_cache
+from pathlib import Path  # needed by save_tokenizer
 
 from tokenizers import Tokenizer, AddedToken
 from tokenizers.models import WordPiece
@@ -81,9 +82,10 @@ def save_tokenizer(path: str | Path) -> None:
     build_tokenizer().save(str(path))
 
 
-def load_tokenizer(path: str | Path) -> PreTrainedTokenizerFast:
+@lru_cache(maxsize=None)
+def load_tokenizer() -> PreTrainedTokenizerFast:
     return PreTrainedTokenizerFast(
-        tokenizer_file=str(path),
+        tokenizer_object=build_tokenizer(),
         unk_token="[UNK]",
         sep_token="[SEP]",
         pad_token="[PAD]",

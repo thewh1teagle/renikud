@@ -3,9 +3,12 @@ import json
 import regex as re
 import unicodedata
 import os
-import concurrent.futures # More modern than mp.Pool
+import sys
+import concurrent.futures
+from pathlib import Path
 from tqdm import tqdm
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from aligner.align import align_word
 
 # Compiled regex is faster
