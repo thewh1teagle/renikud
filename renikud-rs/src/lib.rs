@@ -12,6 +12,14 @@ fn is_hebrew(c: char) -> bool {
     cp >= ALEF && cp <= TAF
 }
 
+fn normalize_graphemes(text: &str) -> String {
+    text.chars().map(|c| match c {
+        '\u{05F3}' | '\'' | '`' | '\u{00B4}' => '\'',
+        '\u{05F4}' | '\u{201C}' | '\u{201D}' => '"',
+        _ => c,
+    }).collect()
+}
+
 pub struct G2P {
     session: Session,
     vocab: HashMap<char, i64>,
@@ -91,6 +99,7 @@ impl G2P {
     }
 
     pub fn phonemize(&mut self, text: &str) -> anyhow::Result<String> {
+        let text = normalize_graphemes(text);
         let normalized: String = text.nfd().collect();
         let (ids, mask, offsets) = self.tokenize(&normalized);
         let len = ids.len();
@@ -182,12 +191,9 @@ impl G2P {
             prev_end = end;
 
             if !is_hebrew(c) {
-                // Skip geresh apostrophe after a geresh letter
-                if c == '\'' && start > 0 {
-                    let prev_char = normalized[..start].chars().next_back();
-                    if prev_char.map_or(false, |pc| self.geresh_map.contains_key(&pc)) {
-                        continue;
-                    }
+                // Orthographic markers have no phonetic realization — drop them
+                if c == '\'' || c == '"' {
+                    continue;
                 }
                 result.push(c);
                 continue;
