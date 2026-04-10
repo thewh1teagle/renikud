@@ -32,7 +32,7 @@ HEBREW_LETTER_CONSONANTS: dict[str, tuple[str, ...]] = {
 
 VOWELS = ("a", "e", "i", "o", "u")
 STRESS = "ˈ"
-SPECIAL_CHARS = ("'", "׳", '"', "״", " ", "-")
+SPECIAL_CHARS = ("'", '"')
 
 def align_word(heb_word: str, ipa_word: str) -> list[tuple[str, str]] | None:
     @functools.lru_cache(maxsize=None)

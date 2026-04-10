@@ -11,15 +11,19 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from aligner.align import align_word
 
+from phonology import ORTHOGRAPHIC_MARKERS, normalize_orthography
+
 # Compiled regex is faster
-HEB_RE = re.compile(r"[^\u05d0-\u05ea']")
+MARKERS = "".join(ORTHOGRAPHIC_MARKERS)
+HEB_RE = re.compile(rf"[^\u05d0-\u05ea{re.escape(MARKERS)}]")
 IPA_RE = re.compile(r"[^abdefghijklmnoprstuvwzɡʁʃʒʔˈχ]")
 NIKUD_RE = re.compile(r"[\p{M}|]")
 
 def normalize(text: str) -> str:
     text = NIKUD_RE.sub("", unicodedata.normalize("NFD", text))
-    # Normalize all geresh variants to ASCII apostrophe
-    text = re.sub(r"[׳'`´]", "'", text)
+    text = normalize_orthography(text)
+    # Treat hyphens as word boundaries
+    text = text.replace("-", " ")
     return text
 
 def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
@@ -48,6 +52,9 @@ def process_line(line: str) -> str | tuple[str, str]:
     heb_raw, sep, ipa = line.strip().partition("\t")
     if not sep:
         return "FAIL_EMPTY"
+    
+    # Treat hyphens as word boundaries in IPA as well to match Hebrew normalization
+    ipa = ipa.replace("-", " ")
     
     heb = normalize(heb_raw)
     result = align_sentence(heb, ipa)

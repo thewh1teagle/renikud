@@ -32,6 +32,13 @@ Custom character-level tokenizer (`src/tokenization.py`) with a 104-token vocab:
 
 Each character is its own token. The tokenizer is built deterministically from code — no external file needed until `save_tokenizer()` is called.
 
+## Hebrew Markers
+
+People write Hebrew markers differently (e.g. using English `'`/`"` or Hebrew `׳`/`״`). We keep it simple:
+1. **Normalize**: We convert all those variations into standard English `'` and `"`. Hyphens (`-`) are replaced with spaces to split words.
+2. **Train**: We map `'` and `"` to an empty sound so the model learns they are just silent markers in the text.
+3. **Infer**: We drop `'` and `"` completely from the final IPA output so the pronunciation stays clean.
+
 ## Label Vocabulary
 
 **Consonants** (25 + ∅): `∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`

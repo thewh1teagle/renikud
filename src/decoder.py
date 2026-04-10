@@ -20,6 +20,7 @@ from phonology import (
     FURTIVE_PATAH_IPA,
     LETTERS_WITH_GERESH,
     is_hebrew_letter,
+    ORTHOGRAPHIC_MARKERS,
 )
 
 
@@ -74,8 +75,9 @@ def decode(
         prev_char_end = end
 
         if not is_hebrew_letter(char):
-            # Skip geresh apostrophe after letters that use it as a digraph marker
-            if char == "'" and start > 0 and text[start - 1] in LETTERS_WITH_GERESH:
+            # Orthographic markers (geresh, gershayim) have no phonetic realization 
+            # and should not appear in the IPA output
+            if char in ORTHOGRAPHIC_MARKERS:
                 pass
             else:
                 result.append(char)

@@ -14,7 +14,7 @@ import datasets
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from constants import IGNORE_INDEX
-from phonology import CONSONANT_TO_ID, VOWEL_TO_ID, STRESS_NONE, is_hebrew_letter, chunk_to_labels
+from phonology import CONSONANT_TO_ID, VOWEL_TO_ID, STRESS_NONE, is_hebrew_letter, chunk_to_labels, ORTHOGRAPHIC_MARKERS
 from tokenization import load_tokenizer
 
 # Global tokenizer for worker processes
@@ -53,13 +53,13 @@ def tokenize_batch(batch):
         char_labels = {}
         align_iter = iter(alignment)
         for char_pos, orig_char in enumerate(hebrew):
-            if not is_hebrew_letter(orig_char) and orig_char != " ":
+            if not is_hebrew_letter(orig_char) and orig_char not in ORTHOGRAPHIC_MARKERS and orig_char != " ":
                 continue
             try:
                 _, chunk = next(align_iter)
             except StopIteration:
                 break
-            if is_hebrew_letter(orig_char):
+            if is_hebrew_letter(orig_char) or orig_char in ORTHOGRAPHIC_MARKERS:
                 char_labels[char_pos] = chunk_to_labels(chunk)
 
         # Align tokens to labels

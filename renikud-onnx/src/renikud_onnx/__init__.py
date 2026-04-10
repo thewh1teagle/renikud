@@ -12,6 +12,7 @@ import onnxruntime as ort
 ALEF_ORD = ord("א")
 TAF_ORD = ord("ת")
 STRESS_MARK = "ˈ"
+ORTHOGRAPHIC_MARKERS = ("'", '"')
 
 
 def _is_hebrew(char: str) -> bool:
@@ -63,6 +64,8 @@ class G2P:
         return stressed
 
     def phonemize(self, text: str) -> str:
+        text = re.sub(r"[׳'`´]", "'", text)
+        text = re.sub(r"[״”“]", '"', text)
         normalized = unicodedata.normalize("NFD", text)
         ids, mask, offsets = self._tokenize(text)
 
@@ -96,7 +99,7 @@ class G2P:
             prev_end = end
 
             if not _is_hebrew(char):
-                if char == "'" and start > 0 and normalized[start - 1] in "גזצץ":
+                if char in ORTHOGRAPHIC_MARKERS:
                     pass
                 else:
                     result.append(char)

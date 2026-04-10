@@ -15,8 +15,20 @@ from __future__ import annotations
 from typing import Final
 
 import torch
+import regex as re
 
 from aligner.align import HEBREW_LETTER_CONSONANTS
+
+# ---------------------------------------------------------------------------
+# Orthographic formatting markers that produce no phonemes
+# ---------------------------------------------------------------------------
+ORTHOGRAPHIC_MARKERS: Final[tuple[str, ...]] = ("'", '"')
+
+def normalize_orthography(text: str) -> str:
+    """Consistently normalizes Geresh and Gershayim variants to strict ASCII."""
+    text = re.sub(r"[׳'`´]", "'", text)
+    text = re.sub(r"[״”“]", '"', text)
+    return text
 
 
 # ---------------------------------------------------------------------------
