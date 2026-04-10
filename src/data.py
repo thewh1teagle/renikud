@@ -7,6 +7,7 @@ from datasets import load_from_disk
 from torch.utils.data import DataLoader
 
 from constants import IGNORE_INDEX
+from tags import TAG_CATEGORIES, tag_prefix_ids
 
 
 class ClassifierDataCollator:
@@ -16,19 +17,22 @@ class ClassifierDataCollator:
     ignore_id: int = IGNORE_INDEX
 
     def __call__(self, features: list[dict]) -> dict:
-        max_len = max(len(f["input_ids"]) for f in features)
+        max_len = max(len(f["input_ids"]) for f in features) + len(TAG_CATEGORIES)
 
         input_ids, attention_mask = [], []
         consonant_labels, vowel_labels, stress_labels = [], [], []
         texts, phonemes = [], []
 
         for f in features:
-            pad = max_len - len(f["input_ids"])
-            input_ids.append(list(f["input_ids"]) + [self.pad_id] * pad)
-            attention_mask.append(list(f["attention_mask"]) + [0] * pad)
-            consonant_labels.append(list(f["consonant_labels"]) + [self.ignore_id] * pad)
-            vowel_labels.append(list(f["vowel_labels"]) + [self.ignore_id] * pad)
-            stress_labels.append(list(f["stress_labels"]) + [self.ignore_id] * pad)
+            prefix = tag_prefix_ids(f.get("tags", []))
+            ids = [f["input_ids"][0]] + prefix + list(f["input_ids"][1:])
+            pad = max_len - len(ids)
+            ignore_prefix = [self.ignore_id] * len(prefix)
+            input_ids.append(ids + [self.pad_id] * pad)
+            attention_mask.append([1] * len(ids) + [0] * pad)
+            consonant_labels.append([f["consonant_labels"][0]] + ignore_prefix + list(f["consonant_labels"][1:]) + [self.ignore_id] * pad)
+            vowel_labels.append([f["vowel_labels"][0]] + ignore_prefix + list(f["vowel_labels"][1:]) + [self.ignore_id] * pad)
+            stress_labels.append([f["stress_labels"][0]] + ignore_prefix + list(f["stress_labels"][1:]) + [self.ignore_id] * pad)
             texts.append(f["hebrew"])
             phonemes.append(f["phonemes"])
 

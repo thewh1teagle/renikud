@@ -28,7 +28,11 @@ from tokenizers import Regex
 from transformers import PreTrainedTokenizerFast
 
 
-SPECIAL_TOKENS = ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"]
+SPECIAL_TOKENS = [
+    "[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]",
+    # Gender tags
+    "[GENDER_UNKNOWN]", "[GENDER_MALE]", "[GENDER_FEMALE]",
+]
 
 
 def build_vocab() -> dict[str, int]:

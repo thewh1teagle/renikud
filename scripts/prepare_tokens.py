@@ -89,6 +89,7 @@ def tokenize_batch(batch):
         "vowel_labels": batch_vowel_labels,
         "stress_labels": batch_stress_labels,
         "phonemes": batch["phonemes"],
+        "tags": batch.get("tags", [[] for _ in hebrew_sentences]),
     }
 
 def main():

@@ -32,6 +32,17 @@ Custom character-level tokenizer (`src/tokenization.py`) with a 104-token vocab:
 
 Each character is its own token. The tokenizer is built deterministically from code — no external file needed until `save_tokenizer()` is called.
 
+## Input Tags
+
+Sentence-level conditioning tags can be prepended to the input to disambiguate context-dependent pronunciations. Tags are special tokens inserted after `[CLS]` and receive `IGNORE_INDEX` labels during training.
+
+Currently supported tags (defined in `src/tags.py`):
+- `[GENDER_UNKNOWN]` — default, used when gender is unspecified
+- `[GENDER_MALE]` — addressee is male (e.g. לך → leˈxa)
+- `[GENDER_FEMALE]` — addressee is female (e.g. לך → ˈlaχ)
+
+Tags are optional in training data — the TSV format accepts an optional third column (`male`/`female`). Examples without a gender column default to `[GENDER_UNKNOWN]`. The model is trained on a mix of tagged and untagged data so it degrades gracefully when no tag is provided.
+
 ## Hebrew Markers
 
 People write Hebrew markers differently (e.g. using English `'`/`"` or Hebrew `׳`/`״`). We keep it simple:

@@ -49,19 +49,24 @@ def align_sentence(heb: str, ipa: str) -> list[tuple[str, str]] | None:
 
 def process_line(line: str) -> str | tuple[str, str]:
     """Processes a single line and returns the JSON string or failure info."""
-    heb_raw, sep, ipa = line.strip().partition("\t")
-    if not sep:
+    parts = line.strip().split("\t")
+    if len(parts) < 2:
         return "FAIL_EMPTY"
-    
+
+    heb_raw, ipa = parts[0], parts[1]
+    tags = parts[2].strip().split() if len(parts) > 2 and parts[2].strip() else []
+
     # Treat hyphens as word boundaries in IPA as well to match Hebrew normalization
     ipa = ipa.replace("-", " ")
-    
+
     heb = normalize(heb_raw)
     result = align_sentence(heb, ipa)
-    
+
     if result is not None:
-        # Return serialized JSON directly to avoid pickling complex objects
-        return ("SUCCESS", json.dumps({"hebrew": heb, "alignment": result, "phonemes": ipa}, ensure_ascii=False))
+        record = {"hebrew": heb, "alignment": result, "phonemes": ipa}
+        if tags:
+            record["tags"] = tags
+        return ("SUCCESS", json.dumps(record, ensure_ascii=False))
     else:
         return ("FAIL", f"{heb}\t{ipa}")
 

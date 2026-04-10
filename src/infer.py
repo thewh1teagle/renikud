@@ -13,6 +13,7 @@ import torch
 from safetensors.torch import load_file
 
 from constants import MAX_LEN
+from tags import build_tag_prefix
 from decoder import decode
 from model import G2PModel
 from phonology import normalize_graphemes
@@ -24,6 +25,7 @@ def parse_args():
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--text", type=str, required=True)
     parser.add_argument("--max-len", type=int, default=MAX_LEN)
+    parser.add_argument("--tags", type=str, nargs="*", default=[], help="Conditioning tags e.g. --tags [GENDER_FEMALE]")
     return parser.parse_args()
 
 
@@ -32,12 +34,14 @@ def load_checkpoint(model: G2PModel, checkpoint_dir: str) -> None:
     model.load_state_dict(state)
 
 
-def phonemize(text: str, model: G2PModel, tokenizer, device: torch.device, max_len: int) -> str:
+def phonemize(text: str, model: G2PModel, tokenizer, device: torch.device, max_len: int, tags: list[str] = []) -> str:
     """Convert unvocalized Hebrew text to IPA using the classifier model."""
     text = normalize_graphemes(text)
 
+    tag_prefix = "".join(build_tag_prefix(tags))
+
     encoding = tokenizer(
-        text,
+        f"{tag_prefix}{text}",
         truncation=True,
         max_length=max_len,
         return_offsets_mapping=True,
@@ -72,7 +76,7 @@ def main():
     load_checkpoint(model, args.checkpoint)
     model.to(device).eval()
 
-    print(phonemize(args.text, model, tokenizer, device, args.max_len))
+    print(phonemize(args.text, model, tokenizer, device, args.max_len, tags=args.tags))
 
 
 if __name__ == "__main__":
