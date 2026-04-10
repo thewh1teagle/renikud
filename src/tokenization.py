@@ -82,6 +82,11 @@ def save_tokenizer(path: str | Path) -> None:
     build_tokenizer().save(str(path))
 
 
+def id_to_token(tokenizer) -> dict[int, str]:
+    """Invert the tokenizer vocab: token_id -> token string."""
+    return {v: k for k, v in tokenizer.get_vocab().items()}
+
+
 @lru_cache(maxsize=None)
 def load_tokenizer() -> PreTrainedTokenizerFast:
     return PreTrainedTokenizerFast(

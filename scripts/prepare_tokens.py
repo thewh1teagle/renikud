@@ -13,13 +13,8 @@ from pathlib import Path
 import datasets
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from constants import (
-    CONSONANT_TO_ID,
-    VOWEL_TO_ID,
-    IGNORE_INDEX,
-    STRESS_NONE,
-)
-from phonology import is_hebrew_letter, chunk_to_labels
+from constants import IGNORE_INDEX
+from phonology import CONSONANT_TO_ID, VOWEL_TO_ID, STRESS_NONE, is_hebrew_letter, chunk_to_labels
 from tokenization import load_tokenizer
 
 # Global tokenizer for worker processes

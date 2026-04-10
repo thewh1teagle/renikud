@@ -4,14 +4,9 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from constants import (
-    NUM_CONSONANT_CLASSES,
-    NUM_VOWEL_CLASSES,
-    NUM_STRESS_CLASSES,
-    IGNORE_INDEX,
-)
+from constants import IGNORE_INDEX
 from encoder import build_encoder
-from phonology import build_consonant_mask, apply_consonant_mask
+from phonology import NUM_CONSONANT_CLASSES, NUM_VOWEL_CLASSES, NUM_STRESS_CLASSES, build_consonant_mask, apply_consonant_mask
 
 
 class G2PModel(nn.Module):

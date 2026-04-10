@@ -1,12 +1,8 @@
 """
-Phonological constraints for Hebrew G2P — single source of truth.
+Phonological constants and constraints for Hebrew G2P — single source of truth.
 
-Provides the letter → consonant mapping in two forms:
-  - HEBREW_LETTER_CONSONANTS: symbol-based (for the DP aligner)
-  - HEBREW_LETTER_CONSONANT_IDS: ID-based (for model masking / inference)
-
-Also provides build_consonant_mask() and apply_consonant_mask() which
-previously lived as private methods on G2PModel.
+Provides the full Hebrew phonological inventory (vowels, consonants, stress),
+letter → consonant mappings, masking utilities, and label parsing.
 
 Notes:
   - "" in HEBREW_LETTER_CONSONANTS means the letter can be silent (→ ∅)
@@ -16,22 +12,67 @@ Notes:
 
 from __future__ import annotations
 
+from typing import Final
+
 import torch
 
-from constants import CONSONANT_TO_ID, VOWEL_TO_ID, VOWELS, VOWEL_NONE, STRESS_YES, STRESS_NONE, STRESS_MARK, ALEF_ORD, TAF_ORD, NUM_CONSONANT_CLASSES
 from aligner.align import HEBREW_LETTER_CONSONANTS
+
+
+# ---------------------------------------------------------------------------
+# Hebrew Unicode range
+# ---------------------------------------------------------------------------
+ALEF_ORD: Final[int] = ord("א")
+TAF_ORD: Final[int] = ord("ת")
 
 
 def is_hebrew_letter(char: str) -> bool:
     return ALEF_ORD <= ord(char) <= TAF_ORD
 
+
 # ---------------------------------------------------------------------------
+# Vowel vocabulary
+# ∅ (index 0) means no vowel — letter is vowel-less or silent
+# ---------------------------------------------------------------------------
+VOWEL_NONE: Final[str] = "∅"
+VOWELS: Final[tuple[str, ...]] = (VOWEL_NONE, "a", "e", "i", "o", "u")
+VOWEL_TO_ID: Final[dict[str, int]] = {v: i for i, v in enumerate(VOWELS)}
+ID_TO_VOWEL: Final[dict[int, str]] = {i: v for i, v in enumerate(VOWELS)}
+NUM_VOWEL_CLASSES: Final[int] = len(VOWELS)
+
+# ---------------------------------------------------------------------------
+# Consonant vocabulary
+# ∅ (index 0) means silent — letter produces no consonant
+# ---------------------------------------------------------------------------
+CONSONANT_NONE: Final[str] = "∅"
+CONSONANTS: Final[tuple[str, ...]] = (
+    CONSONANT_NONE,
+    "b", "v", "d", "h", "z", "χ", "t", "j", "k", "l", "m", "n", "s", "f", "p",
+    "ts", "tʃ", "w", "ʔ", "ɡ", "ʁ", "ʃ", "ʒ", "dʒ",
+)
+CONSONANT_TO_ID: Final[dict[str, int]] = {c: i for i, c in enumerate(CONSONANTS)}
+ID_TO_CONSONANT: Final[dict[int, str]] = {i: c for i, c in enumerate(CONSONANTS)}
+NUM_CONSONANT_CLASSES: Final[int] = len(CONSONANTS)
+
+# ---------------------------------------------------------------------------
+# Stress vocabulary
+# 0 = no stress, 1 = stress (ˈ before vowel)
+# ---------------------------------------------------------------------------
+NUM_STRESS_CLASSES: Final[int] = 2
+STRESS_NONE: Final[int] = 0
+STRESS_YES: Final[int] = 1
+STRESS_MARK: Final[str] = "ˈ"
+
+# ---------------------------------------------------------------------------
+# Letter-level phonological rules
+# ---------------------------------------------------------------------------
+
 # Letter whose word-final + vowel-a chunk reverses to [vowel]χ (furtive patah)
-FURTIVE_PATAH_LETTER: str = "ח"
-FURTIVE_PATAH_IPA: str = "aχ"  # the reversed IPA output: vowel precedes consonant
+FURTIVE_PATAH_LETTER: Final[str] = "ח"
+FURTIVE_PATAH_IPA: Final[str] = "aχ"  # the reversed IPA output: vowel precedes consonant
 
 # Letters where a following apostrophe is a digraph marker, not punctuation
-LETTERS_WITH_GERESH: frozenset[str] = frozenset("גזצץ")
+LETTERS_WITH_GERESH: Final[frozenset[str]] = frozenset("גזצץ")
 
 # ID-keyed view derived from above — used for masking and inference
 HEBREW_LETTER_CONSONANT_IDS: dict[str, tuple[int, ...]] = {
@@ -39,6 +80,9 @@ HEBREW_LETTER_CONSONANT_IDS: dict[str, tuple[int, ...]] = {
     for char, syms in HEBREW_LETTER_CONSONANTS.items()
 }
 
+# ---------------------------------------------------------------------------
+# Consonant masking
+# ---------------------------------------------------------------------------
 
 def build_consonant_mask() -> torch.Tensor:
     """
@@ -83,6 +127,10 @@ def apply_consonant_mask(
 
     return masked
 
+
+# ---------------------------------------------------------------------------
+# Label parsing
+# ---------------------------------------------------------------------------
 
 _VOWELS_SET = set(VOWELS) - {VOWEL_NONE}
 

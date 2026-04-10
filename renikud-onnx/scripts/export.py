@@ -18,7 +18,7 @@ os.environ["NEOBERT_ONNX_EXPORT"] = "1"
 import onnx
 import torch
 from onnxruntime.quantization import QuantType, quantize_dynamic
-from constants import CONSONANTS, VOWELS
+from phonology import CONSONANTS, VOWELS
 from infer import load_checkpoint
 from model import G2PModel
 from phonology import HEBREW_LETTER_CONSONANT_IDS as HEBREW_LETTER_TO_ALLOWED_CONSONANTS, HEBREW_LETTER_CONSONANTS, LETTERS_WITH_GERESH

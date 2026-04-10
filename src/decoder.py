@@ -6,7 +6,7 @@ import re
 
 import torch
 
-from constants import (
+from phonology import (
     ID_TO_CONSONANT,
     ID_TO_VOWEL,
     CONSONANT_TO_ID,
@@ -14,8 +14,6 @@ from constants import (
     VOWEL_NONE,
     STRESS_YES,
     STRESS_MARK,
-)
-from phonology import (
     HEBREW_LETTER_CONSONANT_IDS,
     HEBREW_LETTER_CONSONANTS,
     FURTIVE_PATAH_LETTER,
@@ -23,12 +21,6 @@ from phonology import (
     LETTERS_WITH_GERESH,
     is_hebrew_letter,
 )
-
-
-def build_tokenizer_vocab(tokenizer) -> dict[int, str]:
-    """Map token_id -> single character string for Hebrew letter lookup."""
-    vocab = tokenizer.get_vocab()
-    return {v: k for k, v in vocab.items()}
 
 
 def _best_stress_per_word(offset_mapping: list[tuple[int, int]], text: str, stress_logits: torch.Tensor) -> set[int]:

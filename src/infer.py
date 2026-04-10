@@ -13,9 +13,9 @@ import torch
 from safetensors.torch import load_file
 
 from constants import MAX_LEN
-from decoder import build_tokenizer_vocab, decode
+from decoder import decode
 from model import G2PModel
-from tokenization import load_tokenizer
+from tokenization import load_tokenizer, id_to_token
 
 
 def parse_args():
@@ -48,7 +48,7 @@ def phonemize(text: str, model: G2PModel, tokenizer, device: torch.device, max_l
         out = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            tokenizer_vocab=build_tokenizer_vocab(tokenizer),
+            tokenizer_vocab=id_to_token(tokenizer),
         )
 
     return decode(
