@@ -26,6 +26,15 @@
 ./scripts/ckpt_upload.sh outputs/g2p-classifier/checkpoint-5000
 ```
 
+## Export to ONNX
+
+```console
+./scripts/ckpt_export.sh outputs/g2p-augmented/checkpoint-1500
+./scripts/ckpt_export.sh outputs/g2p-augmented/checkpoint-1500 my-model.onnx
+```
+
+The script wraps `renikud-onnx/scripts/export.py`. Vocabulary and related metadata are embedded in the `.onnx` file, so no extra files are needed at inference time.
+
 ## Download Checkpoint
 
 ```console
