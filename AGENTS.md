@@ -12,6 +12,7 @@
     - Run scripts: `uv run example.py`
     - Create scripts: `uv init --script example.py --python 3.12`
     - Run inline: `uv run python -c "print('Hello, world!')"`
+    - **Do not add inline `# /// script` dependency blocks** to plan scripts if `pyproject.toml` already has the needed dependencies — just run with `uv run` from the project root
 
 ## Validation
 
