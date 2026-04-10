@@ -4,7 +4,7 @@ import os
 import torch
 from typing import Tuple
 
-_ONNX_EXPORT = os.getenv("NEOBERT_ONNX_EXPORT") == "1"
+_ONNX_EXPORT = os.getenv("ONNX_EXPORT") == "1"
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
@@ -45,7 +45,7 @@ def apply_rotary_emb_pure(
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Real-valued rotation equivalent to apply_rotary_emb, without complex tensors.
-    Used when NEOBERT_ONNX_EXPORT=1 since ONNX does not support complex64.
+    Used when ONNX_EXPORT=1 since ONNX does not support complex64.
     freqs_cis must be [..., dim//2, 2] (cos, sin) as returned by precompute_freqs_cis in that mode.
     (x_r + i*x_i) * (cos + i*sin) = (x_r*cos - x_i*sin) + i*(x_r*sin + x_i*cos)
     """

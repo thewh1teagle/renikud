@@ -4,7 +4,7 @@ import os
 import torch
 from torch import nn
 
-_ONNX_EXPORT = os.getenv("NEOBERT_ONNX_EXPORT") == "1"
+_ONNX_EXPORT = os.getenv("ONNX_EXPORT") == "1"
 
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from torch.nn.functional import scaled_dot_product_attention
@@ -16,7 +16,7 @@ from xformers.ops import SwiGLU
 
 
 class PureSwiGLU(nn.Module):
-    """Plain PyTorch SwiGLU — used instead of xformers.ops.SwiGLU when NEOBERT_ONNX_EXPORT=1,
+    """Plain PyTorch SwiGLU — used instead of xformers.ops.SwiGLU when ONNX_EXPORT=1,
     since xformers uses a custom C++ kernel that cannot be traced by torch.export."""
 
     def __init__(self, in_features: int, hidden_features: int, out_features: int, bias: bool = False):

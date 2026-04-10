@@ -1,15 +1,10 @@
 """NeoBERT encoder for Hebrew G2P, initialized from scratch.
 
-Architecture follows chandar-lab/NeoBERT shrunk to ~113M params:
-  - 16 layers, 768 hidden, 12 heads, 3072 FFN
-  - SwiGLU activation
-  - RoPE positional embeddings
-  - Pre-RMSNorm
-  - Full attention every layer (xformers)
-  - 4096 token context
+A shrunk variant of chandar-lab/NeoBERT with SwiGLU, RoPE, Pre-RMSNorm,
+and a character-level Hebrew vocab. See NeoBERTConfig below for exact dims.
 
 Vocab size matches the tokenizer built in tokenization.py.
-Set NEOBERT_ONNX_EXPORT=1 before importing to use ONNX-compatible ops.
+Set ONNX_EXPORT=1 before importing to use ONNX-compatible ops.
 """
 
 from __future__ import annotations

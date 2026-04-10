@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 # Must be set before importing model/encoder so NeoBERT uses ONNX-compatible ops
-os.environ["NEOBERT_ONNX_EXPORT"] = "1"
+os.environ["ONNX_EXPORT"] = "1"
 
 import onnx
 import torch
