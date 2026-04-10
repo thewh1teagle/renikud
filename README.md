@@ -2,35 +2,24 @@
 
 Hebrew grapheme-to-phoneme (G2P) training project for converting unvocalized Hebrew text into IPA.
 
-Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
+🤗 Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
 
-## Architecture
+## Features
 
-NeoBERT encoder (~19M params) trained from scratch → three coupled classification heads (consonant, vowel, stress) per Hebrew letter.
+- Context-aware Hebrew G2P (text → IPA)
+- Letter-level constrained decoding
+- Passthrough for non-Hebrew text
+- Runs on ONNX Runtime (no PyTorch)
+- ~20 MB, real-time inference
 
-Each Hebrew letter gets exactly one output slot predicting a (consonant, vowel, stress) triple. Uses a custom character-level tokenizer built for Hebrew.
+## Usage
 
-See `docs/ARCHITECTURE.md` for full design details.
-
-## Training
-
-See `docs/TRAINING.md` for data preparation, training commands, upload/download, and hyperparameters.
-
-## Benchmark
+Inference is published as **`renikud-onnx`** on PyPI. Install and download the ONNX weights from Hugging Face (they are not bundled with the wheel):
 
 ```console
-./scripts/train_bench.sh outputs/g2p-classifier/checkpoint-5000
+pip install renikud-onnx
+wget https://huggingface.co/thewh1teagle/renikud/resolve/main/model.onnx -O model.onnx
 ```
-
-## Inference (ONNX)
-
-Export a checkpoint to ONNX:
-
-```console
-./scripts/ckpt_export.sh outputs/g2p-classifier/checkpoint-5000
-```
-
-Then use the Python package:
 
 ```python
 from renikud_onnx import G2P
@@ -40,4 +29,12 @@ print(g2p.phonemize("שלום עולם"))
 # → ʃalˈom ʔolˈam
 ```
 
-Or the Rust crate — see `renikud-rs/`.
+See `renikud-onnx/README.md` for the same install / download / usage flow. For Rust inference, see `renikud-rs/`.
+
+## Architecture
+
+See `docs/ARCHITECTURE.md` for model design and implementation details.
+
+## Training
+
+See `docs/TRAINING.md` for data preparation, training commands, upload/download, ONNX export, benchmark, and hyperparameters.
