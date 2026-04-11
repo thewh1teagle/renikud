@@ -64,6 +64,7 @@ where = ["src"]
 [tool.uv.workspace]
 members = [
     "renikud-onnx",
+    "tiny-renikud",
 ]
 
 

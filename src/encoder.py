@@ -1,15 +1,17 @@
-"""NeoBERT encoder for Hebrew G2P, initialized from scratch.
+"""Tiny BERT encoder for Hebrew G2P — ESP32-friendly (~238K params).
 
-A shrunk variant of chandar-lab/NeoBERT with SwiGLU, RoPE, Pre-RMSNorm,
-and a character-level Hebrew vocab. See NeoBERTConfig below for exact dims.
+Uses transformers.BertModel with a minimal config:
+  vocab_size=104 (character-level Hebrew vocab)
+  hidden_size=96, num_hidden_layers=3, num_attention_heads=4
+  intermediate_size=192 → ~238K total params, ~232 KB int8
 
-Vocab size matches the tokenizer built in tokenization.py.
-Set ONNX_EXPORT=1 before importing to use ONNX-compatible ops.
+This replaces the custom NeoBERT encoder while keeping the same
+.config.hidden_size interface expected by G2PModel.
 """
 
 from __future__ import annotations
 
-from neobert.model import NeoBERT, NeoBERTConfig
+from transformers import BertConfig, BertModel
 
 from tokenization import build_vocab
 
@@ -18,13 +20,17 @@ def _vocab_size() -> int:
     return len(build_vocab())
 
 
-def build_encoder(flash_attention: bool = False) -> NeoBERT:
-    config = NeoBERTConfig(
-        vocab_size=_vocab_size(),      # 104 instead of 30522 (character-level Hebrew vocab)
-        num_hidden_layers=6,           # 28 in full NeoBERT; 6 gives ~19M with our tiny vocab
-        hidden_size=512,               # reduced from 768
-        intermediate_size=2048,        # 4x hidden
-        num_attention_heads=8,         # reduced from 12
-        max_length=4096,
+def build_encoder(flash_attention: bool = False) -> BertModel:
+    config = BertConfig(
+        vocab_size=_vocab_size(),       # 104 character-level Hebrew tokens
+        hidden_size=96,
+        num_hidden_layers=3,
+        num_attention_heads=4,          # head_dim = 24
+        intermediate_size=192,          # 2× hidden (tight for ESP32)
+        max_position_embeddings=512,
+        type_vocab_size=1,              # no segment embeddings needed
+        hidden_dropout_prob=0.1,
+        attention_probs_dropout_prob=0.1,
+        pad_token_id=0,
     )
-    return NeoBERT(config)
+    return BertModel(config, add_pooling_layer=False)
