@@ -29,7 +29,7 @@ from config import parse_args
 from data import make_dataloaders
 from eval import evaluate
 from metrics import log_train_metrics, log_eval_metrics
-from model import G2PModel
+from model import NikudModel
 from optimizer import build_optimizer, build_scheduler
 from tokenization import load_tokenizer
 
@@ -48,7 +48,7 @@ def main():
 
     train_loader, eval_loader = make_dataloaders(args)
 
-    model = G2PModel(flash_attention=args.flash_attention)
+    model = NikudModel(flash_attention=args.flash_attention)
 
     if args.resume:
         state = load_file(str(Path(args.resume) / "model.safetensors"), device="cpu")
@@ -99,7 +99,6 @@ def main():
                     print(f"\n[step {opt_step}] Encoder unfrozen.")
 
             batch.pop("texts")
-            batch.pop("phonemes")
             with accelerator.autocast():
                 out = model(**batch)
 

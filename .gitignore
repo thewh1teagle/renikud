@@ -31,3 +31,6 @@ model-he/
 *.wav
 *.tar.gz
 backup_checkpoints/
+outputs-backup/
+ilspeech-v2/
+michael-gold-v1/

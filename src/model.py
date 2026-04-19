@@ -1,4 +1,4 @@
-"""Hebrew G2P classifier model — per-character prediction of consonant, vowel, and stress."""
+"""Hebrew diacritization model — per-character prediction of nikud and shin dot."""
 
 from __future__ import annotations
 
@@ -6,20 +6,18 @@ import torch
 import torch.nn as nn
 from constants import IGNORE_INDEX
 from encoder import build_encoder
-from phonology import NUM_CONSONANT_CLASSES, NUM_VOWEL_CLASSES, NUM_STRESS_CLASSES, build_consonant_mask, apply_consonant_mask
+from nikud import NUM_NIKUD_CLASSES, NUM_SHIN_CLASSES
 
 
-class G2PModel(nn.Module):
+class NikudModel(nn.Module):
     """
-    Per-character Hebrew G2P model.
+    Per-character Hebrew diacritization model.
 
     For each Hebrew letter in the input, predicts:
-      - consonant class (from a per-letter constrained set)
-      - vowel class     (a / e / i / o / u / ∅)
-      - stress          (yes / no)
+      - nikud class  (shva / patah / qamats / dagesh+vowel combos / ∅ / ...)
+      - shin class   (shin dot / sin dot) — only meaningful for ש
 
-    Non-Hebrew characters (spaces, punctuation, digits, Latin) are passed
-    through unchanged at inference — the heads are never called for them.
+    Non-Hebrew characters are passed through unchanged at inference.
     """
 
     def __init__(self, dropout_rate: float = 0.1, flash_attention: bool = False) -> None:
@@ -30,21 +28,15 @@ class G2PModel(nn.Module):
 
         self.dropout = nn.Dropout(dropout_rate)
 
-        # Coupled classification heads: each head sees encoder state + previous head logits
-        self.consonant_head = nn.Linear(hidden_size, NUM_CONSONANT_CLASSES)
-        self.vowel_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES, NUM_VOWEL_CLASSES)
-        self.stress_head = nn.Linear(hidden_size + NUM_CONSONANT_CLASSES + NUM_VOWEL_CLASSES, NUM_STRESS_CLASSES)
-
-        self._consonant_mask: torch.Tensor = build_consonant_mask()
+        self.nikud_head = nn.Linear(hidden_size, NUM_NIKUD_CLASSES)
+        self.shin_head = nn.Linear(hidden_size, NUM_SHIN_CLASSES)
 
     def forward(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        consonant_labels: torch.Tensor | None = None,
-        vowel_labels: torch.Tensor | None = None,
-        stress_labels: torch.Tensor | None = None,
-        tokenizer_vocab: dict[int, str] | None = None,
+        nikud_labels: torch.Tensor | None = None,
+        shin_labels: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         encoder_outputs = self.encoder(
             input_ids=input_ids,
@@ -53,30 +45,20 @@ class G2PModel(nn.Module):
         )
         hidden = self.dropout(encoder_outputs.last_hidden_state)  # [B, S, H]
 
-        consonant_logits = self.consonant_head(hidden)  # [B, S, NUM_CONSONANT_CLASSES]
-
-        # Couple heads using raw (unmasked) consonant logits — consistent between train and inference
-        vowel_logits = self.vowel_head(torch.cat([hidden, consonant_logits], dim=-1))                          # [B, S, NUM_VOWEL_CLASSES]
-        stress_logits = self.stress_head(torch.cat([hidden, consonant_logits, vowel_logits], dim=-1))          # [B, S, NUM_STRESS_CLASSES]
-
-        # Apply consonant mask only to the output (inference constraint, not used during training)
-        if tokenizer_vocab is not None:
-            consonant_logits = apply_consonant_mask(consonant_logits, input_ids, tokenizer_vocab, self._consonant_mask)
+        nikud_logits = self.nikud_head(hidden)   # [B, S, NUM_NIKUD_CLASSES]
+        shin_logits = self.shin_head(hidden)     # [B, S, NUM_SHIN_CLASSES]
 
         output: dict[str, torch.Tensor] = {
-            "consonant_logits": consonant_logits,
-            "vowel_logits": vowel_logits,
-            "stress_logits": stress_logits,
+            "nikud_logits": nikud_logits,
+            "shin_logits": shin_logits,
         }
 
-        if consonant_labels is not None:
+        if nikud_labels is not None:
             loss_fct = nn.CrossEntropyLoss(ignore_index=IGNORE_INDEX)
             loss = (
-                loss_fct(consonant_logits.view(-1, NUM_CONSONANT_CLASSES), consonant_labels.view(-1))
-                + loss_fct(vowel_logits.view(-1, NUM_VOWEL_CLASSES), vowel_labels.view(-1))
-                + loss_fct(stress_logits.view(-1, NUM_STRESS_CLASSES), stress_labels.view(-1))
+                loss_fct(nikud_logits.view(-1, NUM_NIKUD_CLASSES), nikud_labels.view(-1))
+                + loss_fct(shin_logits.view(-1, NUM_SHIN_CLASSES), shin_labels.view(-1))
             )
             output["loss"] = loss
 
         return output
-

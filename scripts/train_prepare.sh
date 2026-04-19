@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INPUT=${1:?"Usage: $0 <input.tsv>"}
+if [ ! -f knesset_phonemes_v1.txt ]; then
+  wget -c https://huggingface.co/datasets/thewh1teagle/phonikud-phonemes-data/resolve/main/knesset_phonemes_v1.txt.7z
+  7z x knesset_phonemes_v1.txt.7z
+fi
 
-uv run scripts/split_dataset.py "$INPUT" dataset/train.tsv dataset/val.tsv
+uv run scripts/prepare_dataset.py knesset_phonemes_v1.txt knesset.txt
 
-uv run scripts/prepare_align.py dataset/train.tsv dataset/train_alignment.jsonl
-uv run scripts/prepare_align.py dataset/val.tsv dataset/val_alignment.jsonl
+uv run scripts/split_dataset.py knesset.txt dataset/train.txt dataset/val.txt
 
-uv run scripts/prepare_tokens.py dataset/train_alignment.jsonl dataset/.cache/train
-uv run scripts/prepare_tokens.py dataset/val_alignment.jsonl dataset/.cache/val
+uv run scripts/prepare_tokens.py dataset/train.txt dataset/.cache/train
+uv run scripts/prepare_tokens.py dataset/val.txt dataset/.cache/val

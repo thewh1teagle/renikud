@@ -1,8 +1,8 @@
 """
-Split a TSV dataset into train and val sets.
+Split a text dataset into train and val sets.
 
 Usage:
-    uv run scripts/split_dataset.py dataset/data.tsv dataset/train.tsv dataset/val.tsv
+    uv run scripts/split_dataset.py dataset/data.txt dataset/train.txt dataset/val.txt
 """
 
 import argparse

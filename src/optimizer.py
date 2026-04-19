@@ -5,10 +5,10 @@ from __future__ import annotations
 import torch
 from transformers import get_cosine_schedule_with_warmup
 
-from model import G2PModel
+from model import NikudModel
 
 
-def build_optimizer(model: G2PModel, encoder_lr: float, head_lr: float, weight_decay: float) -> torch.optim.AdamW:
+def build_optimizer(model: NikudModel, encoder_lr: float, head_lr: float, weight_decay: float) -> torch.optim.AdamW:
     """AdamW with discriminative LRs: lower for encoder, higher for classification heads."""
     no_decay = {"bias", "LayerNorm.weight", "layer_norm.weight", "norm.weight"}
 

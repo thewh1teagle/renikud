@@ -1,4 +1,4 @@
-"""Dataset loading and collation for classifier training."""
+"""Dataset loading and collation for nikud diacritization training."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from constants import IGNORE_INDEX
 
 
-class ClassifierDataCollator:
-    """Pad classifier dataset features to the same length within a batch."""
+class NikudDataCollator:
+    """Pad dataset features to the same length within a batch."""
 
     pad_id: int = 0
     ignore_id: int = IGNORE_INDEX
@@ -19,32 +19,28 @@ class ClassifierDataCollator:
         max_len = max(len(f["input_ids"]) for f in features)
 
         input_ids, attention_mask = [], []
-        consonant_labels, vowel_labels, stress_labels = [], [], []
-        texts, phonemes = [], []
+        nikud_labels, shin_labels = [], []
+        texts = []
 
         for f in features:
             pad = max_len - len(f["input_ids"])
             input_ids.append(list(f["input_ids"]) + [self.pad_id] * pad)
             attention_mask.append(list(f["attention_mask"]) + [0] * pad)
-            consonant_labels.append(list(f["consonant_labels"]) + [self.ignore_id] * pad)
-            vowel_labels.append(list(f["vowel_labels"]) + [self.ignore_id] * pad)
-            stress_labels.append(list(f["stress_labels"]) + [self.ignore_id] * pad)
-            texts.append(f["hebrew"])
-            phonemes.append(f["phonemes"])
+            nikud_labels.append(list(f["nikud_labels"]) + [self.ignore_id] * pad)
+            shin_labels.append(list(f["shin_labels"]) + [self.ignore_id] * pad)
+            texts.append(f["vocalized"])
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
-            "consonant_labels": torch.tensor(consonant_labels, dtype=torch.long),
-            "vowel_labels": torch.tensor(vowel_labels, dtype=torch.long),
-            "stress_labels": torch.tensor(stress_labels, dtype=torch.long),
+            "nikud_labels": torch.tensor(nikud_labels, dtype=torch.long),
+            "shin_labels": torch.tensor(shin_labels, dtype=torch.long),
             "texts": texts,
-            "phonemes": phonemes,
         }
 
 
 def make_dataloaders(args) -> tuple[DataLoader, DataLoader]:
-    collator = ClassifierDataCollator()
+    collator = NikudDataCollator()
     train_loader = DataLoader(
         load_from_disk(args.train_dataset),
         batch_size=args.train_batch_size,

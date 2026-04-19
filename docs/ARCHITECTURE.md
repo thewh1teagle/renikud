@@ -2,26 +2,22 @@
 
 ## Problem
 
-Convert unvocalized Hebrew text into IPA. Hebrew is written without vowels — the same string can have multiple valid pronunciations depending on context. The model must recover the pronunciation purely from the consonant skeleton and surrounding context.
+Add nikud (vowel diacritics) to unvocalized Hebrew text. Hebrew is written without vowels — the same consonant skeleton can have multiple valid vocalizations depending on context. The model must recover the diacritics purely from the consonant skeleton and surrounding context.
 
 ## Core Idea
 
-Rather than sequence-to-sequence (which requires alignment at inference time), the model frames G2P as **per-character classification**. Every Hebrew letter independently predicts a `(consonant, vowel, stress)` triple. Non-Hebrew characters (spaces, punctuation, digits, Latin) are passed through unchanged.
+The model frames diacritization as **per-character classification**. Every Hebrew letter independently predicts a `(nikud, shin)` pair. Non-Hebrew characters (spaces, punctuation, digits, Latin) are passed through unchanged.
 
-This works because Hebrew has a nearly one-to-one letter→phoneme structure: each letter produces exactly one consonant (or silence) and optionally carries a vowel and stress. The model learns the exceptions from context.
+This works because Hebrew diacritics attach to individual letters — each letter carries at most one nikud combo and optionally a shin/sin dot. The model learns context-dependent choices (e.g. shva vs. no nikud) from the encoder.
 
 ## Model
 
-`G2PModel` in `src/model.py`:
+`NikudModel` in `src/model.py`:
 
 1. **Encoder** — ModernBERT-style encoder initialized from scratch with a custom 104-token Hebrew character vocabulary. See `src/encoder.py` for the exact configuration (~19M params).
-2. **Three coupled classification heads** — each head sees the encoder hidden state *plus* the raw logits from the previous head, so later heads have information about earlier predictions rather than being blind to them:
-   - **Consonant head** → `hidden` → 26 classes (`∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`)
-   - **Vowel head** → `hidden + consonant_logits` → 7 classes (`∅ a e i o u`)
-   - **Stress head** → `hidden + consonant_logits + vowel_logits` → 2 classes (none / stressed)
-3. **Consonant masking** — logits for phonetically impossible consonants are zeroed out (`-1e9`) using a precomputed per-letter mask from `phonology.py`. For example, ל can only ever produce `l` or `∅`, never `b`.
-
-At inference (`src/infer.py`), the consonant mask is applied before argmax so the model can never predict a phonetically impossible consonant for a given letter — e.g. ק always decodes to `k`, never `v`. Each Hebrew letter position assembles its output as `[consonant][ˈ?][vowel?]`, with one exception: word-final ח with vowel `a` emits `[ˈ?]aχ` (furtive patah — the vowel precedes the consonant in IPA).
+2. **Two classification heads** — each head sees the encoder hidden state:
+   - **Nikud head** → `hidden` → 28 classes (no nikud, shva, hataf variants, vowels, dagesh+vowel combos, qamats qatan variants)
+   - **Shin head** → `hidden` → 2 classes (shin dot / sin dot) — only meaningful for ש
 
 ## Tokenizer
 
@@ -30,32 +26,60 @@ Custom character-level tokenizer (`src/tokenization.py`) with a 104-token vocab:
 - Hebrew letters א–ת (including final forms) + maqaf, geresh, gershayim
 - ASCII lowercase, digits, punctuation, space
 
-Each character is its own token. The tokenizer is built deterministically from code — no external file needed until `save_tokenizer()` is called.
-
-## Hebrew Markers
-
-People write Hebrew markers differently (e.g. using English `'`/`"` or Hebrew `׳`/`״`). We keep it simple:
-1. **Normalize**: We convert all those variations into standard English `'` and `"`. Hyphens (`-`) are replaced with spaces to split words.
-2. **Train**: We map `'` and `"` to an empty sound so the model learns they are just silent markers in the text.
-3. **Infer**: We drop `'` and `"` completely from the final IPA output so the pronunciation stays clean.
+Each character is its own token. The tokenizer strips diacritics via `StripAccents` — nikud is handled separately before tokenization.
 
 ## Label Vocabulary
 
-**Consonants** (25 + ∅): `∅ b v d h z χ t j k l m n s f p ts tʃ w ʔ ɡ ʁ ʃ ʒ dʒ`
+**Nikud** (28 classes):
 
-**Vowels** (6 + ∅): `∅ a e i o u`
+| Class | Unicode | Description |
+|---|---|---|
+| `` | — | no nikud |
+| `ְ` | 05B0 | shva |
+| `ֱ` | 05B1 | hataf segol |
+| `ֲ` | 05B2 | hataf patah |
+| `ֳ` | 05B3 | hataf qamats |
+| `ִ` | 05B4 | hiriq |
+| `ֵ` | 05B5 | tsere |
+| `ֶ` | 05B6 | segol |
+| `ַ` | 05B7 | patah |
+| `ָ` | 05B8 | qamats |
+| `ֹ` | 05B9 | holam |
+| `ֺ` | 05BA | holam haser |
+| `ּ` | 05BB | qubuts |
+| `ּ` | 05BC | dagesh |
+| `ְּ` | 05B0+05BC | shva + dagesh |
+| `ֱּ` | 05B1+05BC | hataf segol + dagesh |
+| `ֲּ` | 05B2+05BC | hataf patah + dagesh |
+| `ֳּ` | 05B3+05BC | hataf qamats + dagesh |
+| `ִּ` | 05B4+05BC | hiriq + dagesh |
+| `ֵּ` | 05B5+05BC | tsere + dagesh |
+| `ֶּ` | 05B6+05BC | segol + dagesh |
+| `ַּ` | 05B7+05BC | patah + dagesh |
+| `ָּ` | 05B8+05BC | qamats + dagesh |
+| `ֹּ` | 05B9+05BC | holam + dagesh |
+| `ֺּ` | 05BA+05BC | holam haser + dagesh |
+| `ּּ` | 05BB+05BC | qubuts + dagesh |
+| `ׇ` | 05C7 | qamats qatan |
+| `ׇּ` | 05BC+05C7 | dagesh + qamats qatan |
 
-**Stress**: binary — 0 (none) or 1 (ˈ precedes vowel)
+**Shin** (2 classes): shin dot (`׃05C1`) / sin dot (`05C2`)
+
+## Diacritic Normalization
+
+Raw Hebrew text may encode multi-diacritic sequences in different codepoint orders. We normalize once at the entry point using `sort_diacritics()` (`src/nikud.py`), which sorts combining marks after each base letter by codepoint value. `NIKUD_CLASSES` multi-char entries are defined in the same codepoint-sorted order. This means:
+
+- `extract_labels` does a plain dict lookup — no re-sorting needed
+- `decoder.py` sorts `shin + nikud` on output to match the normalized form
 
 ## Data Pipeline
 
 ```
-raw TSV (hebrew<TAB>ipa)
-  → scripts/prepare_align.py   DP aligner: assigns one IPA chunk per Hebrew letter → JSONL
-  → scripts/prepare_tokens.py  tokenize + map labels to token positions → Arrow dataset
-  → train.py           training loop
+knesset_phonemes_v1.txt.7z  (downloaded from HuggingFace)
+  → scripts/prepare_dataset.py   extract left (Hebrew) column, strip | markers → knesset.txt
+  → scripts/split_dataset.py     shuffle + split → train.txt / val.txt
+  → scripts/prepare_tokens.py    sort_diacritics → strip nikud → tokenize → extract labels → Arrow dataset
+  → src/train.py                 training loop
 ```
 
-The aligner (`src/aligner/align.py`) uses constrained recursive search with memoization to assign one IPA chunk per Hebrew letter. Each letter can only match consonants from its `HEBREW_LETTER_CONSONANTS` entry, which prunes the search space and prevents invalid alignments. `scripts/align.py` parallelizes this across sentences.
-
-Label alignment uses `offset_mapping`: only single-character token positions (offset `end - start == 1`) that correspond to Hebrew letters receive labels. CLS, SEP, spaces, and punctuation get `IGNORE_INDEX = -100`.
+Label extraction (`scripts/prepare_tokens.py`): for each Hebrew letter, collect the diacritic codepoints immediately following it in the vocalized text. Strip shin/sin dot separately, look up the remainder in `NIKUD_TO_ID`. The tokenizer receives the stripped (unvocalized) text; labels are aligned to token positions via `offset_mapping`.

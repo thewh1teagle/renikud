@@ -1,4 +1,4 @@
-"""Evaluation helpers for the Hebrew G2P classifier."""
+"""Evaluation helpers for the Hebrew diacritization model."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import jiwer
 
 from constants import IGNORE_INDEX
 from decoder import decode
+from nikud import remove_nikud, sort_diacritics
 
 
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
-    """Per-token accuracy ignoring IGNORE_INDEX positions."""
     mask = labels != IGNORE_INDEX
     if mask.sum() == 0:
         return 0.0
@@ -21,13 +21,13 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
 def decode_batch(texts: list[str], out: dict, tokenizer) -> list[str]:
     preds = []
     for i, text in enumerate(texts):
-        encoding = tokenizer(text, truncation=True, max_length=512, return_offsets_mapping=True, return_tensors=None)
+        stripped = remove_nikud(sort_diacritics(text))
+        encoding = tokenizer(stripped, truncation=True, max_length=512, return_offsets_mapping=True)
         preds.append(decode(
-            text=text,
+            text=stripped,
             offset_mapping=encoding["offset_mapping"],
-            consonant_logits=out["consonant_logits"][i],
-            vowel_logits=out["vowel_logits"][i],
-            stress_logits=out["stress_logits"][i],
+            nikud_logits=out["nikud_logits"][i],
+            shin_logits=out["shin_logits"][i],
         ))
     return preds
 
@@ -35,35 +35,32 @@ def decode_batch(texts: list[str], out: dict, tokenizer) -> list[str]:
 def evaluate(model, eval_loader, device, fp16: bool, tokenizer) -> dict:
     model.eval()
     total_loss = 0.0
-    consonant_acc_sum = vowel_acc_sum = stress_acc_sum = 0.0
+    nikud_acc_sum = shin_acc_sum = 0.0
     n = 0
     refs, hyps = [], []
 
     with torch.no_grad():
         for batch in eval_loader:
             texts = batch.pop("texts")
-            phonemes = batch.pop("phonemes")
             batch = {k: v.to(device) for k, v in batch.items()}
 
             with torch.autocast("cuda", enabled=fp16):
                 out = model(**batch)
 
             total_loss += out["loss"].item()
-            consonant_acc_sum += compute_accuracy(out["consonant_logits"], batch["consonant_labels"])
-            vowel_acc_sum += compute_accuracy(out["vowel_logits"], batch["vowel_labels"])
-            stress_acc_sum += compute_accuracy(out["stress_logits"], batch["stress_labels"])
+            nikud_acc_sum += compute_accuracy(out["nikud_logits"], batch["nikud_labels"])
+            shin_acc_sum += compute_accuracy(out["shin_logits"], batch["shin_labels"])
             n += 1
 
-            refs.extend(phonemes)
+            refs.extend([sort_diacritics(t) for t in texts])
             hyps.extend(decode_batch(texts, out, tokenizer))
 
     model.train()
     return {
         "eval_loss": total_loss / n,
-        "consonant_acc": consonant_acc_sum / n,
-        "vowel_acc": vowel_acc_sum / n,
-        "stress_acc": stress_acc_sum / n,
-        "mean_acc": (consonant_acc_sum + vowel_acc_sum + stress_acc_sum) / (3 * n),
+        "nikud_acc": nikud_acc_sum / n,
+        "shin_acc": shin_acc_sum / n,
+        "mean_acc": (nikud_acc_sum + shin_acc_sum) / (2 * n),
         "cer": jiwer.cer(refs, hyps),
         "wer": jiwer.wer(refs, hyps),
     }

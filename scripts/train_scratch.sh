@@ -21,7 +21,7 @@ done
 uv run accelerate launch src/train.py \
   --train-dataset dataset/.cache/train \
   --eval-dataset dataset/.cache/val \
-  --output-dir outputs/g2p-classifier \
+  --output-dir outputs/nikud \
   $RESUME \
   $RESET_STEPS \
   "${EXTRA[@]+"${EXTRA[@]}"}"
