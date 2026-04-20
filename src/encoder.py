@@ -1,15 +1,14 @@
-"""NeoBERT encoder for Hebrew G2P, initialized from scratch.
+"""ModernBERT encoder for Hebrew G2P, initialized from scratch.
 
-A shrunk variant of chandar-lab/NeoBERT with SwiGLU, RoPE, Pre-RMSNorm,
-and a character-level Hebrew vocab. See NeoBERTConfig below for exact dims.
-
-Vocab size matches the tokenizer built in tokenization.py.
-Set ONNX_EXPORT=1 before importing to use ONNX-compatible ops.
+Same architecture as answerdotai/ModernBERT-base (22 layers, hidden=768,
+intermediate=1152, 12 heads, RoPE, SwiGLU, Pre-RMSNorm) but with a
+104-token Hebrew character vocabulary instead of the original 50368-token vocab.
 """
 
 from __future__ import annotations
 
-from neobert.model import NeoBERT, NeoBERTConfig
+from transformers import ModernBertConfig
+from transformers.models.modernbert.modeling_modernbert import ModernBertModel
 
 from tokenization import build_vocab
 
@@ -18,13 +17,9 @@ def _vocab_size() -> int:
     return len(build_vocab())
 
 
-def build_encoder(flash_attention: bool = False) -> NeoBERT:
-    config = NeoBERTConfig(
-        vocab_size=_vocab_size(),      # 104 instead of 30522 (character-level Hebrew vocab)
-        num_hidden_layers=6,           # 28 in full NeoBERT; 6 gives ~19M with our tiny vocab
-        hidden_size=512,               # reduced from 768
-        intermediate_size=2048,        # 4x hidden
-        num_attention_heads=8,         # reduced from 12
-        max_length=4096,
-    )
-    return NeoBERT(config)
+def build_config() -> ModernBertConfig:
+    return ModernBertConfig(vocab_size=_vocab_size(), pad_token_id=0)
+
+
+def build_encoder(flash_attention: bool = False) -> ModernBertModel:
+    return ModernBertModel(build_config())
