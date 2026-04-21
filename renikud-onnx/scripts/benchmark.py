@@ -46,8 +46,8 @@ def main():
 
     gt_data = []
     with open(args.gt) as f:
-        for row in csv.DictReader(f, delimiter="\t"):
-            gt_data.append({"sentence": row["Sentence"], "phonemes": row["Phonemes"]})
+        for row in csv.DictReader(f, delimiter="\t", fieldnames=["sentence", "phonemes"]):
+            gt_data.append({"sentence": row["sentence"], "phonemes": row["phonemes"]})
 
     refs, hyps, examples = [], [], []
     for item in tqdm(gt_data, desc="Benchmarking"):
