@@ -35,6 +35,5 @@ def parse_args():
     parser.add_argument("--save-epochs", action="store_true", default=False, help="Save a checkpoint at the end of each epoch (never pruned)")
     parser.add_argument("--save-best", action="store_true", default=False, help="Save best checkpoint by WER to output_dir/best/")
     parser.add_argument("--flash-attention", action="store_true", default=False)
-    parser.add_argument("--patience", type=int, default=0, help="Stop after N evals with no WER improvement (0 = disabled)")
     parser.add_argument("--dataloader-workers", type=int, default=0)
     return parser.parse_args()

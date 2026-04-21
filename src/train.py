@@ -71,7 +71,9 @@ def main():
     )
 
     best_wer = float("inf")
-    patience_count = 0
+    best_acc = 0.0
+    best_wer_step = 0
+    no_improve_count = 0
     opt_step = 0
     if args.resume and not args.reset_steps:
         opt_step = resume_step(args.resume, scheduler)
@@ -132,19 +134,15 @@ def main():
                         save_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, opt_step, metrics["mean_acc"], args.save_total_limit)
                         if args.save_best and save_best_checkpoint(accelerator.unwrap_model(model), tokenizer, output_dir, metrics["wer"], None, opt_step):
                             print(f"[step {opt_step}] New best WER={metrics['wer']:.4f} → saved to {output_dir}/best")
-                        if args.patience > 0:
-                            if metrics["wer"] < best_wer:
-                                best_wer = metrics["wer"]
-                                patience_count = 0
-                            else:
-                                patience_count += 1
-                                print(f"[step {opt_step}] No WER improvement ({patience_count}/{args.patience}), best={best_wer:.4f}")
-                                if patience_count >= args.patience:
-                                    print(f"[step {opt_step}] Early stopping triggered.")
-                                    break
-
-        if args.patience > 0 and patience_count >= args.patience:
-            break
+                        if metrics["wer"] < best_wer:
+                            best_wer = metrics["wer"]
+                            best_acc = metrics["mean_acc"]
+                            best_wer_step = opt_step
+                            no_improve_count = 0
+                            print(f"[step {opt_step}] WER acc: {metrics['mean_acc'] * 100:.2f}%  ↑ new best!")
+                        else:
+                            no_improve_count += 1
+                            print(f"[step {opt_step}] WER acc: {metrics['mean_acc'] * 100:.2f}%  ↓ best: {best_acc * 100:.2f}% @ step {best_wer_step}  (stuck for {no_improve_count} evals)")
 
         if args.save_epochs and accelerator.is_main_process:
             metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
