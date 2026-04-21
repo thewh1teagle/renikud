@@ -26,8 +26,8 @@ PUNCT = str.maketrans("", "", ".,?!")
 def load_gt(filepath: str):
     data = []
     with open(filepath, encoding="utf-8") as f:
-        for row in csv.DictReader(f, delimiter="\t"):
-            data.append({"sentence": row["Sentence"], "phonemes": row["Phonemes"]})
+        for row in csv.DictReader(f, delimiter="\t", fieldnames=["sentence", "phonemes"]):
+            data.append({"sentence": row["sentence"], "phonemes": row["phonemes"]})
     return data
 
 

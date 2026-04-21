@@ -6,7 +6,7 @@ shift
 EXTRA="$@"
 
 if [ ! -f gt.tsv ]; then
-  wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/gt.tsv
+  wget https://raw.githubusercontent.com/thewh1teagle/heb-g2p-benchmark/refs/heads/main/web/data/gt.tsv
 fi
 
 uv run scripts/benchmark.py --checkpoint "$CHECKPOINT" --gt gt.tsv $EXTRA
