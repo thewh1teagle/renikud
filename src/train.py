@@ -136,13 +136,13 @@ def main():
                             print(f"[step {opt_step}] New best WER={metrics['wer']:.4f} → saved to {output_dir}/best")
                         if metrics["wer"] < best_wer:
                             best_wer = metrics["wer"]
-                            best_acc = metrics["word_acc"]
+                            best_acc = 1.0 - metrics["wer"]
                             best_wer_step = opt_step
                             no_improve_count = 0
-                            print(f"[step {opt_step}] word acc: {metrics['word_acc'] * 100:.2f}%  ↑ new best!")
+                            print(f"[step {opt_step}] word acc: {(1.0 - metrics['wer']) * 100:.2f}%  ↑ new best!")
                         else:
                             no_improve_count += 1
-                            print(f"[step {opt_step}] word acc: {metrics['word_acc'] * 100:.2f}%  ↓ best: {best_acc * 100:.2f}% @ step {best_wer_step}  (stuck for {no_improve_count} evals)")
+                            print(f"[step {opt_step}] word acc: {(1.0 - metrics['wer']) * 100:.2f}%  ↓ best: {best_acc * 100:.2f}% @ step {best_wer_step}  (stuck for {no_improve_count} evals)")
 
         if args.save_epochs and accelerator.is_main_process:
             metrics = evaluate(accelerator.unwrap_model(model), eval_loader, device, args.fp16, tokenizer)
