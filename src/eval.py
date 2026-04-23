@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import torch
 import jiwer
+import regex
 
 from constants import IGNORE_INDEX
 from decoder import decode
 from nikud import remove_nikud, sort_diacritics
+
+_MAT_LECT_RE = regex.compile(r"\p{L}\u05AF")
+
+
+def normalize_nikud(text: str, keep_matres: bool = False) -> str:
+    text = sort_diacritics(text)
+    if not keep_matres:
+        text = _MAT_LECT_RE.sub("", text)
+    return text
 
 
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
@@ -52,8 +62,8 @@ def evaluate(model, eval_loader, device, fp16: bool, tokenizer) -> dict:
             shin_acc_sum += compute_accuracy(out["shin_logits"], batch["shin_labels"])
             n += 1
 
-            refs.extend([sort_diacritics(t) for t in texts])
-            hyps.extend(decode_batch(texts, out, tokenizer))
+            refs.extend([normalize_nikud(t) for t in texts])
+            hyps.extend([normalize_nikud(t) for t in decode_batch(texts, out, tokenizer)])
 
     model.train()
     return {

@@ -40,8 +40,10 @@ def decode(
         shin = SHIN_CLASSES[int(shin_preds[tok_idx])] if char == SHIN_LETTER else ""
 
         if nikud == MAT_LECT_TOKEN:
-            result.append(char + shin + "\u05AF")
-            continue
+            if char in ("\u05D0", "\u05D5", "\u05D9"):  # aleph, vav, yod
+                result.append(char + "\u05AF")
+                continue
+            nikud = ""
 
         result.append(char + "".join(sorted(shin + nikud)))
 
