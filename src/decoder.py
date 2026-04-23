@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from nikud import NIKUD_CLASSES, SHIN_CLASSES, SHIN_LETTER, is_hebrew_letter
+from nikud import NIKUD_CLASSES, SHIN_CLASSES, SHIN_LETTER, MAT_LECT_TOKEN, is_hebrew_letter
 
 
 def decode(
@@ -38,6 +38,10 @@ def decode(
 
         nikud = NIKUD_CLASSES[int(nikud_preds[tok_idx])]
         shin = SHIN_CLASSES[int(shin_preds[tok_idx])] if char == SHIN_LETTER else ""
+
+        if nikud == MAT_LECT_TOKEN:
+            result.append(char + shin + "\u05AF")
+            continue
 
         result.append(char + "".join(sorted(shin + nikud)))
 

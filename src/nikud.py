@@ -5,8 +5,11 @@ from __future__ import annotations
 import regex
 import re
 
+MAT_LECT_TOKEN = "<MAT_LECT>"
+
 NIKUD_CLASSES = [
-    "",          # 0 — no nikud
+    "",              # 0 — no nikud
+    MAT_LECT_TOKEN,  # 1 — matres lectionis (silent vowel-carrier)
     "\u05B0",    # shva
     "\u05B1",    # hataf segol
     "\u05B2",    # hataf patah
@@ -47,7 +50,7 @@ SHIN_TO_ID = {s: i for i, s in enumerate(SHIN_CLASSES)}
 NUM_NIKUD_CLASSES = len(NIKUD_CLASSES)
 NUM_SHIN_CLASSES = len(SHIN_CLASSES)
 
-_NIKUD_PATTERN = re.compile(r"[\u05B0-\u05BD\u05C1\u05C2\u05C7]")
+_NIKUD_PATTERN = re.compile(r"[\u05AF\u05B0-\u05BD\u05C1\u05C2\u05C7]")
 
 ALEF_ORD = ord("\u05D0")  # א
 TAF_ORD = ord("\u05EA")   # ת
@@ -87,5 +90,11 @@ def extract_labels(letter: str, diacritics: str) -> tuple[int, int]:
         shin_id = SHIN_TO_ID["\u05C2"]
         remaining = remaining.replace("\u05C2", "")
 
-    nikud_id = NIKUD_TO_ID.get(remaining, 0)
+    if "\u05AF" in remaining:
+        remaining = remaining.replace("\u05AF", "")
+        nikud_id = NIKUD_TO_ID[MAT_LECT_TOKEN]
+    elif remaining in NIKUD_TO_ID:
+        nikud_id = NIKUD_TO_ID[remaining]
+    else:
+        nikud_id = 0
     return nikud_id, shin_id
