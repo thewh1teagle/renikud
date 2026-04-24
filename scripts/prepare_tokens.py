@@ -59,7 +59,7 @@ def tokenize_batch(batch):
                 _, chunk = next(align_iter)
             except StopIteration:
                 break
-            if is_hebrew_letter(orig_char) or orig_char in ORTHOGRAPHIC_MARKERS:
+            if is_hebrew_letter(orig_char):
                 char_labels[char_pos] = chunk_to_labels(chunk)
 
         # Align tokens to labels
@@ -73,7 +73,13 @@ def tokenize_batch(batch):
                 c_labels[tok_idx] = CONSONANT_TO_ID.get(c, IGNORE_INDEX)
                 v_labels[tok_idx] = VOWEL_TO_ID.get(v, IGNORE_INDEX)
                 s_labels[tok_idx] = s
-            elif char_idx < len(hebrew) and not is_hebrew_letter(hebrew[char_idx]) and hebrew[char_idx] != " ":
+            # Other punctuation is silent; markers stay ignored.
+            elif (
+                char_idx < len(hebrew)
+                and not is_hebrew_letter(hebrew[char_idx])
+                and hebrew[char_idx] not in ORTHOGRAPHIC_MARKERS
+                and hebrew[char_idx] != " "
+            ):
                 c_labels[tok_idx] = CONSONANT_TO_ID["∅"]
                 v_labels[tok_idx] = VOWEL_TO_ID["∅"]
                 s_labels[tok_idx] = STRESS_NONE

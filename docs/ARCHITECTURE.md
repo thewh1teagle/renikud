@@ -34,10 +34,9 @@ Each character is its own token. The tokenizer is built deterministically from c
 
 ## Hebrew Markers
 
-People write Hebrew markers differently (e.g. using English `'`/`"` or Hebrew `׳`/`״`). We keep it simple:
-1. **Normalize**: We convert all those variations into standard English `'` and `"`. Hyphens (`-`) are replaced with spaces to split words.
-2. **Train**: We map `'` and `"` to an empty sound so the model learns they are just silent markers in the text.
-3. **Infer**: We drop `'` and `"` completely from the final IPA output so the pronunciation stays clean.
+People write Hebrew markers differently (e.g. using English `'`/`"` or Hebrew `׳`/`״`). We normalize all variants to ASCII `'` and `"`, and treat them as orthographic context: they stay in the input and alignment, but their labels are `IGNORE_INDEX`. At decode time they are dropped and cannot win per-word stress.
+
+Example: `בג״ץ` → `בג"ץ` aligns as `ב=ba ג=ɡˈa "=∅ ץ=ts`; labels are `ב=(b,a,0) ג=(ɡ,a,1) "=(IGNORE_INDEX) ץ=(ts,∅,0)`.
 
 ## Label Vocabulary
 
@@ -58,4 +57,4 @@ raw TSV (hebrew<TAB>ipa)
 
 The aligner (`src/aligner/align.py`) uses constrained recursive search with memoization to assign one IPA chunk per Hebrew letter. Each letter can only match consonants from its `HEBREW_LETTER_CONSONANTS` entry, which prunes the search space and prevents invalid alignments. `scripts/align.py` parallelizes this across sentences.
 
-Label alignment uses `offset_mapping`: only single-character token positions (offset `end - start == 1`) that correspond to Hebrew letters receive labels. CLS, SEP, spaces, and punctuation get `IGNORE_INDEX = -100`.
+Label alignment uses `offset_mapping`: only single-character token positions (offset `end - start == 1`) that correspond to Hebrew letters receive phonological labels. CLS, SEP, spaces, and orthographic markers get `IGNORE_INDEX = -100`. Other punctuation is supervised as silent.

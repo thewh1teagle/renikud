@@ -35,6 +35,10 @@ def _best_stress_per_word(offset_mapping: list[tuple[int, int]], text: str, stre
     for tok_idx, (start, end) in enumerate(offset_mapping):
         if end - start != 1:
             continue
+        char = text[start:end]
+        # Stress only lands on Hebrew letters.
+        if not is_hebrew_letter(char):
+            continue
         for word_idx, (ws, we) in enumerate(word_spans):
             if ws <= start < we:
                 words[word_idx].append(tok_idx)
