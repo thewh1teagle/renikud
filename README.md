@@ -38,3 +38,13 @@ See `docs/ARCHITECTURE.md` for model design and implementation details.
 ## Training
 
 See `docs/TRAINING.md` for data preparation, training commands, upload/download, ONNX export, benchmark, and hyperparameters.
+
+## Citation
+
+```bibtex
+@misc{melichov2026renikud,
+  title={ReNikud: Audio-Supervised Hebrew Grapheme-to-Phoneme Conversion},
+  author={Maxim Melichov and Yakov Kolani and Morris Alper},
+  year={2026},
+  note={Code and models forthcoming},
+}
