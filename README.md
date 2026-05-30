@@ -1,8 +1,30 @@
-# renikud
+<p align="center">
+  <a target="_blank" href="https://renikud.github.io">
+    <img
+        width="110px"
+        alt="ReNikud logo"
+        src="./design/logo.webp"
+    />
+  </a>
+</p>
 
-Hebrew grapheme-to-phoneme (G2P) model that converts unvocalized text to IPA.
+<h1 align="center">ReNikud - Audio-Supervised Hebrew Grapheme-to-Phoneme</h1>
 
-🤗 Model: [thewh1teagle/renikud](https://huggingface.co/thewh1teagle/renikud)
+<p align="center">
+  <em>Convert unvocalized Hebrew text into IPA for TTS, speech technology, and spoken-language research</em>
+</p>
+
+<p align="center">
+  <a target="_blank" href="https://renikud.github.io">
+    🌐 Project Page
+  </a>
+  &nbsp; | &nbsp;
+  <a target="_blank" href="https://arxiv.org/pdf/2506.12311">
+    📄 Research Paper
+  </a>
+</p>
+
+<hr />
 
 ## Features
 
